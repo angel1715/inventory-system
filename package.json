@@ -1,0 +1,28 @@
+{
+  "name": "inventory-system",
+  "version": "1.0.0",
+  "description": "",
+  "main": "electron.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "electron": "electron ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/angel1715/inventory-system.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/angel1715/inventory-system/issues"
+  },
+  "homepage": "https://github.com/angel1715/inventory-system#readme",
+  "dependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^42.1.0",
+    "electron-builder": "^26.8.1",
+    "wait-on": "^9.0.10"
+  }
+}
