@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import InvitationManager from "@/components/admin/InvitationManager";
 import {
   TrendingUp,
   Wallet,
@@ -56,6 +57,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [cash, setCash] = useState<any>(null);
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    // Lógica para detectar si eres el Admin
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user?.email === "tu-email-admin@tusistema.com") {
+      setIsAdmin(true);
+    }
+    load(range);
+  }, [range]);
 
   async function load(currentRange: typeof range) {
     try {
@@ -392,7 +403,12 @@ export default function DashboardPage() {
           </div>
         </RoleGuard>
 
-        {/* ... Resto de componentes (Gráficos, Bajo Stock, RoleGuard) permanecen iguales ... */}
+        {/* SECCIÓN DE ADMINISTRADOR - Solo visible para ti */}
+        {isAdmin && (
+          <div className="mt-8 pt-8 border-t border-dashed border-zinc-300">
+            <InvitationManager />
+          </div>
+        )}
       </div>
     </div>
   );

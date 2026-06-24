@@ -498,3 +498,29 @@ export async function resetPassword(token: string, password: string) {
     body: JSON.stringify({ token, password }),
   });
 }
+
+// =========================
+// INVITATIONS
+// =========================
+
+/**
+ * Genera un nuevo token de invitación.
+ * Requiere permisos de administrador.
+ */
+export const generateInvitation = () =>
+  request("/generate-invitation", {
+    method: "POST",
+  });
+
+/**
+ * Obtiene el listado de todas las invitaciones generadas.
+ * Requiere permisos de administrador.
+ */
+export const getInvitations = () =>
+  request("/invitations");
+
+// =========================
+// INVITATIONS (Público)
+// =========================
+export const validateInvitationToken = (token: string) =>
+  request(`/auth/validate-invitation/${token}`);

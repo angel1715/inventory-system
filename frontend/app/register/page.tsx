@@ -1,38 +1,55 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { login, register } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { register, login, validateInvitationToken } from "@/lib/api";
 import toast from "react-hot-toast";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") || "";
 
   const [form, setForm] = useState({
-    businessName: "", // Nuevo campo
+    token: token,
+    businessName: "",
     name: "",
     email: "",
     password: "",
   });
 
   const [loading, setLoading] = useState(false);
+  const [isValidating, setIsValidating] = useState(true);
+  const [isTokenValid, setIsTokenValid] = useState(false);
+
+  // 1. Validar el token al cargar la página
+  useEffect(() => {
+    async function checkToken() {
+      if (!token) {
+        setIsValidating(false);
+        return;
+      }
+      try {
+        await validateInvitationToken(token);
+        setIsTokenValid(true);
+      } catch (err) {
+        toast.error("El link de invitación no es válido o ya expiró");
+        setIsTokenValid(false);
+      } finally {
+        setIsValidating(false);
+      }
+    }
+    checkToken();
+  }, [token]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    // Validamos el nuevo campo
-    if (!form.businessName || !form.name || !form.email || !form.password) {
-      toast.error("All fields are required");
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-
-      // El backend ahora espera businessName
+      // El backend ahora marcará el token como usado en este proceso
       await register(form);
 
-      // AUTO LOGIN
       const data = await login({
         email: form.email,
         password: form.password,
@@ -43,10 +60,35 @@ export default function RegisterPage() {
 
       window.location.href = "/dashboard";
     } catch (err: any) {
-      toast.error(err.message || "Error creating account");
+      toast.error(err.message || "Error al crear la cuenta");
     } finally {
       setLoading(false);
     }
+  }
+
+  // 2. Estados de carga o error de validación
+  if (isValidating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Validando invitación...
+      </div>
+    );
+  }
+
+  if (!isTokenValid) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">
+            Acceso Denegado
+          </h1>
+          <p className="text-gray-600">
+            Este registro es privado. Por favor, solicita un link de invitación
+            válido a tu administrador.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -55,50 +97,47 @@ export default function RegisterPage() {
         onSubmit={handleSubmit}
         className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md"
       >
-        <h1 className="text-gray-900 text-3xl font-bold mb-6">
-          Create Account
-        </h1>
+        <h1 className="text-gray-900 text-3xl font-bold mb-6">Crear Cuenta</h1>
 
         <div className="space-y-4">
-          {/* Campo nuevo para el negocio */}
           <input
             type="text"
-            placeholder="Business Name"
+            placeholder="Nombre del Negocio"
+            required
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.businessName}
             onChange={(e) => setForm({ ...form, businessName: e.target.value })}
           />
-
           <input
             type="text"
-            placeholder="Your Name"
+            placeholder="Tu Nombre"
+            required
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-
           <input
             type="email"
             placeholder="Email"
+            required
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Contraseña"
+            required
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black text-white p-3 rounded-xl"
+            className="w-full bg-black text-white p-3 rounded-xl hover:bg-gray-800 transition-colors"
           >
-            {loading ? "Creating..." : "Create account"}
+            {loading ? "Creando cuenta..." : "Registrarse"}
           </button>
         </div>
       </form>

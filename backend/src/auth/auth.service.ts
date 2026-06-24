@@ -10,6 +10,7 @@ import * as bcrypt from "bcrypt";
 import { JwtService } from "@nestjs/jwt";
 import * as crypto from "crypto";
 import { EmailService } from "../email/email.service";
+import { RegisterDto } from "./dto/register.dto";
 
 @Injectable()
 export class AuthService {
@@ -19,17 +20,12 @@ export class AuthService {
     private emailService: EmailService
   ) { }
 
-  async register(data: {
-    token: string;
-    businessName: string;
-    name: string;
-    email: string;
-    password: string;
-  }) {
-    const email = data.email.trim().toLowerCase();
+  async register(data: RegisterDto) {
+  const email = data.email.trim().toLowerCase();
 
-    // 1. Validar invitación ANTES de cualquier transacción
-    const invitation = await this.prisma.invitation.findUnique({
+  return await this.prisma.$transaction(async (tx) => {
+    // 1. Buscar y validar la invitación DENTRO de la transacción
+    const invitation = await tx.invitation.findUnique({
       where: { token: data.token }
     });
 
@@ -38,61 +34,59 @@ export class AuthService {
     }
 
     // 2. Verificar usuario existente
-    const exists = await this.prisma.user.findUnique({ where: { email } });
+    const exists = await tx.user.findUnique({ where: { email } });
     if (exists) throw new BadRequestException("El correo ya está en uso");
 
-    // 3. Transacción para asegurar integridad total
-    return await this.prisma.$transaction(async (tx) => {
-      // A. Marcar invitación como usada
-      await tx.invitation.update({
-        where: { id: invitation.id },
-        data: { used: true }
-      });
+    // 3. Marcar invitación como usada
+    await tx.invitation.update({
+      where: { id: invitation.id },
+      data: { used: true }
+    });
 
-      // B. Crear el negocio
-      const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
-      const business = await tx.business.create({
-        data: { name: data.businessName.trim(), slug },
-      });
+    // 4. Crear el negocio
+    const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
+    const business = await tx.business.create({
+      data: { name: data.businessName.trim(), slug },
+    });
 
-      // C. Crear configuraciones base
-      await tx.businessSettings.create({
-        data: { businessId: business.id, businessName: data.businessName.trim() }
-      });
+    // 5. Crear configuraciones base
+    await tx.businessSettings.create({
+      data: { businessId: business.id, businessName: data.businessName.trim() }
+    });
 
-      // D. Crear usuario
-      const hashedPassword = await bcrypt.hash(data.password, 12);
-      const user = await tx.user.create({
-        data: {
-          name: data.name.trim(),
-          email,
-          password: hashedPassword,
-          role: "OWNER",
-          active: true,
-          businessId: business.id,
-        },
-      });
+    // 6. Crear el usuario
+    const hashedPassword = await bcrypt.hash(data.password, 12);
+    const user = await tx.user.create({
+      data: {
+        name: data.name.trim(),
+        email,
+        password: hashedPassword,
+        role: "OWNER",
+        active: true,
+        businessId: business.id,
+      },
+    });
 
-      // E. Generar token JWT
-      const jwtToken = await this.jwtService.signAsync({
-        sub: user.id,
+    // 7. Generar token JWT
+    const jwtToken = await this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      businessId: business.id,
+    });
+
+    return {
+      token: jwtToken,
+      user: {
+        id: user.id,
+        name: user.name,
         email: user.email,
         role: user.role,
-        businessId: business.id,
-      });
-
-      return {
-        token: jwtToken,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          businessId: business.id
-        },
-      };
-    });
-  }
+        businessId: business.id
+      },
+    };
+  });
+}
 
   async login(email: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();

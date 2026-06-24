@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  Param,
 } from "@nestjs/common";
 
 import { AuthGuard } from "@nestjs/passport";
@@ -16,7 +17,8 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { PrismaService } from "../prisma/prisma.service";
-import { Throttle, SkipThrottle } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
+import * as crypto from 'crypto';
 
 @Controller('auth')
 export class AuthController {
@@ -25,28 +27,18 @@ export class AuthController {
     private readonly prisma: PrismaService
   ) { }
 
+  // Método privado auxiliar para validación de administrador
+  private validateAdmin(user: any) {
+    if (user.email !== process.env.ADMIN_EMAIL) {
+      throw new ForbiddenException("No tienes permisos de administrador");
+    }
+  }
+
   @Post("register")
   async register(@Body() body: RegisterDto) {
-    // 1. Validar si el token es válido y no ha sido usado
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { token: body.token }
-    });
-
-    if (!invitation || invitation.used || invitation.expiresAt < new Date()) {
-      throw new ForbiddenException("Invitación inválida o expirada");
-    }
-
-    // 2. Ejecutar la lógica de registro (Business + User)
-    // ... tu lógica de registro actual ...
-
-    // 3. Marcar la invitación como usada
-    await this.prisma.invitation.update({
-      where: { id: invitation.id },
-      data: { used: true }
-    });
-    const result = await this.authService.register(body);
-
-    return result;
+    // El servicio se encarga de validar el token, 
+    // asegurar la transacción y retornar el resultado
+    return await this.authService.register(body);
   }
 
   @Throttle({ default: { limit: 3, ttl: 900000 } })
@@ -55,9 +47,45 @@ export class AuthController {
     return this.authService.login(body.email, body.password);
   }
 
-  // =========================
-  // NUEVOS ENDPOINTS INTEGRADOS
-  // =========================
+  @Get("validate-invitation/:token")
+  async validateInvitation(@Param("token") token: string) {
+    const invitation = await this.prisma.invitation.findFirst({
+      where: {
+        token,
+        used: false,
+        expiresAt: { gt: new Date() } // Que no haya expirado
+      }
+    });
+
+    if (!invitation) {
+      throw new NotFoundException("Invitación inválida o expirada");
+    }
+    return { valid: true };
+  }
+
+  @Post("generate-invitation")
+  @UseGuards(AuthGuard("jwt"))
+  async generateInvitation(@Request() req: any) {
+    this.validateAdmin(req.user);
+
+    const token = crypto.randomBytes(16).toString('hex');
+    return await this.prisma.invitation.create({
+      data: {
+        token,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
+
+  @Get("invitations")
+  @UseGuards(AuthGuard("jwt"))
+  async getInvitations(@Request() req: any) {
+    this.validateAdmin(req.user);
+
+    return await this.prisma.invitation.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  }
 
   @Throttle({ default: { limit: 3, ttl: 900000 } })
   @Post("forgot-password")
@@ -70,21 +98,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() body: any) {
     const { token, password } = body;
-    console.log("Datos recibidos en backend:", { token, password }); // <-- AGREGA ESTO
-
     try {
-      const result = await this.authService.resetPassword(token, password);
-      console.log("Resultado del servicio:", result); // <-- AGREGA ESTO
-      return result;
+      return await this.authService.resetPassword(token, password);
     } catch (error: any) {
-      console.error("ERROR EN BACKEND:", error.message); // <-- AGREGA ESTO
       throw error;
     }
   }
-
-  // =========================
-  // ENDPOINT EXISTENTE
-  // =========================
 
   @Get("me")
   @UseGuards(AuthGuard("jwt"))
@@ -105,14 +124,13 @@ export class AuthController {
     const subscription = user.business?.subscription
       ?? await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
 
-    // AQUÍ ESTÁ LA CORRECCIÓN:
     return {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
       businessId: user.businessId,
-      active: user.active, // <-- AGREGAMOS ESTE CAMPO QUE VIENE DE LA BD
+      active: user.active,
       subscriptionStatus: subscription?.status ?? "INACTIVE",
       subscription: subscription
     };
