@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation"; // 1. Importa useParams
+import { useParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import Receipt from "@/components/Receipt";
 
-// 2. Elimina { params } de las props
+// Forzamos que no espere props de página
 export default function InvoicePage() {
-  const params = useParams<{ id: string }>(); // 3. Obtén el id desde aquí
+  const params = useParams<{ id: string }>();
   const id = params?.id;
 
   const [data, setData] = useState<any>(null);
@@ -15,13 +15,13 @@ export default function InvoicePage() {
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   useEffect(() => {
-    if (!id) return; // 4. Valida que el ID exista
+    if (!id) return;
 
     fetch(`${API}/sales/${id}/invoice`)
       .then((res) => res.json())
       .then((json) => setData(json))
       .catch((err) => console.error(err));
-  }, [id, API]); // 5. Usa 'id' en el array de dependencias
+  }, [id, API]);
 
   if (authLoading || !data) {
     return (
@@ -39,3 +39,7 @@ export default function InvoicePage() {
     </div>
   );
 }
+
+// AGREGA ESTO AL FINAL DEL ARCHIVO PARA EVITAR QUE NEXTJS INTENTE
+// PRE-RENDERIZARLO COMO SERVER COMPONENT DINÁMICO
+export const dynamic = "force-client";
