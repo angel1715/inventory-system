@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import Receipt from "@/components/Receipt";
 
-// Forzamos que no espere props de página
 export default function InvoicePage() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
@@ -39,7 +38,3 @@ export default function InvoicePage() {
     </div>
   );
 }
-
-// AGREGA ESTO AL FINAL DEL ARCHIVO PARA EVITAR QUE NEXTJS INTENTE
-// PRE-RENDERIZARLO COMO SERVER COMPONENT DINÁMICO
-export const dynamic = "force-client";
