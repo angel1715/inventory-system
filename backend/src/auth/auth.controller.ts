@@ -8,6 +8,7 @@ import {
   NotFoundException,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from "@nestjs/common";
 
 import { AuthGuard } from "@nestjs/passport";
@@ -26,7 +27,26 @@ export class AuthController {
 
   @Post("register")
   async register(@Body() body: RegisterDto) {
-    return this.authService.register(body);
+    // 1. Validar si el token es válido y no ha sido usado
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { token: body.token }
+    });
+
+    if (!invitation || invitation.used || invitation.expiresAt < new Date()) {
+      throw new ForbiddenException("Invitación inválida o expirada");
+    }
+
+    // 2. Ejecutar la lógica de registro (Business + User)
+    // ... tu lógica de registro actual ...
+
+    // 3. Marcar la invitación como usada
+    await this.prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { used: true }
+    });
+    const result = await this.authService.register(body);
+
+    return result;
   }
 
   @Throttle({ default: { limit: 3, ttl: 900000 } })

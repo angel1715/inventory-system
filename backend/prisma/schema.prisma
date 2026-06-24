@@ -215,6 +215,15 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String   // Email al que le enviamos la invitación
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
 model Supplier {
   id        String   @id @default(cuid())
   name      String

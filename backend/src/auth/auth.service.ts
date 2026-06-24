@@ -19,41 +19,79 @@ export class AuthService {
     private emailService: EmailService
   ) { }
 
-  async register(data: { name: string; email: string; password: string; }) {
+  async register(data: {
+    token: string;
+    businessName: string;
+    name: string;
+    email: string;
+    password: string;
+  }) {
     const email = data.email.trim().toLowerCase();
-    const usersCount = await this.prisma.user.count();
-    if (usersCount > 0) throw new ForbiddenException("Public registration is disabled");
 
+    // 1. Validar invitación ANTES de cualquier transacción
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { token: data.token }
+    });
+
+    if (!invitation || invitation.used || invitation.expiresAt < new Date()) {
+      throw new ForbiddenException("Invitación no válida o expirada");
+    }
+
+    // 2. Verificar usuario existente
     const exists = await this.prisma.user.findUnique({ where: { email } });
-    if (exists) throw new BadRequestException("Email already in use");
+    if (exists) throw new BadRequestException("El correo ya está en uso");
 
-    const hashedPassword = await bcrypt.hash(data.password, 12);
-    const baseSlug = data.name.trim().toLowerCase().replace(/\s+/g, "-");
-    const slug = `${baseSlug}-${Date.now()}`;
+    // 3. Transacción para asegurar integridad total
+    return await this.prisma.$transaction(async (tx) => {
+      // A. Marcar invitación como usada
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: { used: true }
+      });
 
-    const business = await this.prisma.business.create({
-      data: { name: `${data.name}'s Business`, slug },
-    });
+      // B. Crear el negocio
+      const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
+      const business = await tx.business.create({
+        data: { name: data.businessName.trim(), slug },
+      });
 
-    const user = await this.prisma.user.create({
-      data: {
-        name: data.name.trim(),
-        email,
-        password: hashedPassword,
-        role: "OWNER",
-        active: true,
+      // C. Crear configuraciones base
+      await tx.businessSettings.create({
+        data: { businessId: business.id, businessName: data.businessName.trim() }
+      });
+
+      // D. Crear usuario
+      const hashedPassword = await bcrypt.hash(data.password, 12);
+      const user = await tx.user.create({
+        data: {
+          name: data.name.trim(),
+          email,
+          password: hashedPassword,
+          role: "OWNER",
+          active: true,
+          businessId: business.id,
+        },
+      });
+
+      // E. Generar token JWT
+      const jwtToken = await this.jwtService.signAsync({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
         businessId: business.id,
-      },
-    });
+      });
 
-    const token = await this.jwtService.signAsync({
-      sub: user.id, email: user.email, role: user.role, businessId: business.id,
+      return {
+        token: jwtToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          businessId: business.id
+        },
+      };
     });
-
-    return {
-      token,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, businessId: business.id },
-    };
   }
 
   async login(email: string, password: string) {
@@ -90,7 +128,7 @@ export class AuthService {
     if (!user) throw new NotFoundException("Usuario no encontrado");
 
     const token = crypto.randomBytes(32).toString('hex');
-    
+
     await this.prisma.passwordResetToken.create({
       data: {
         token: token,
@@ -101,14 +139,14 @@ export class AuthService {
 
     // CORREGIDO: El nombre del método coincide con tu EmailService
     await this.emailService.sendResetPasswordEmail(email, token);
-    
+
     return { message: "Correo enviado" };
   }
 
   async resetPassword(token: string, password: string) {
     // 1. Buscar el token y verificar expiración
     const resetEntry = await this.prisma.passwordResetToken.findFirst({
-      where: { 
+      where: {
         token,
         expiresAt: { gt: new Date() } // Solo tokens no expirados
       },

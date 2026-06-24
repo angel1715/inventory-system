@@ -1,11 +1,11 @@
-
-import {
-    IsEmail,
-    IsNotEmpty,
-    MinLength,
-} from "class-validator";
+import { IsEmail, IsNotEmpty, MinLength } from "class-validator";
 
 export class RegisterDto {
+    @IsNotEmpty()
+    token!: string; // Añadido aquí
+
+    @IsNotEmpty()
+    businessName!: string;
 
     @IsNotEmpty()
     name!: string;
@@ -16,4 +16,3 @@ export class RegisterDto {
     @MinLength(6)
     password!: string;
 }
-

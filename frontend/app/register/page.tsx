@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [form, setForm] = useState({
+    businessName: "", // Nuevo campo
     name: "",
     email: "",
     password: "",
@@ -19,7 +20,8 @@ export default function RegisterPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.name || !form.email || !form.password) {
+    // Validamos el nuevo campo
+    if (!form.businessName || !form.name || !form.email || !form.password) {
       toast.error("All fields are required");
       return;
     }
@@ -27,7 +29,7 @@ export default function RegisterPage() {
     try {
       setLoading(true);
 
-      // REGISTER
+      // El backend ahora espera businessName
       await register(form);
 
       // AUTO LOGIN
@@ -37,12 +39,11 @@ export default function RegisterPage() {
       });
 
       localStorage.setItem("token", data.token);
-
       localStorage.setItem("user", JSON.stringify(data.user));
 
       window.location.href = "/dashboard";
     } catch (err: any) {
-      alert(err.message);
+      toast.error(err.message || "Error creating account");
     } finally {
       setLoading(false);
     }
@@ -59,17 +60,21 @@ export default function RegisterPage() {
         </h1>
 
         <div className="space-y-4">
+          {/* Campo nuevo para el negocio */}
           <input
-            type=" text"
-            placeholder="Name"
+            type="text"
+            placeholder="Business Name"
+            className="text-gray-700 w-full border p-3 rounded-xl"
+            value={form.businessName}
+            onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+          />
+
+          <input
+            type="text"
+            placeholder="Your Name"
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.name}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                name: e.target.value,
-              })
-            }
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
 
           <input
@@ -77,12 +82,7 @@ export default function RegisterPage() {
             placeholder="Email"
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.email}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                email: e.target.value,
-              })
-            }
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
 
           <input
@@ -90,12 +90,7 @@ export default function RegisterPage() {
             placeholder="Password"
             className="text-gray-700 w-full border p-3 rounded-xl"
             value={form.password}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                password: e.target.value,
-              })
-            }
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
           />
 
           <button
