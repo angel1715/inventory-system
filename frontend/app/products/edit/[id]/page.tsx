@@ -1,4 +1,4 @@
-"use client";
+("use client");
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -8,29 +8,32 @@ import toast from "react-hot-toast";
 
 export default function EditProductPage() {
   const router = useRouter();
-  const params = useParams();
+  // 1. Forzamos que params sea tratado como un objeto que contiene un id
+  const params = useParams<{ id: string }>();
   const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false); // 🔥 NUEVO: Estado para bloquear el botón de guardado
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!params?.id) return;
+    // 2. Acceso seguro al id
+    const id = params?.id;
+    if (!id) return;
 
-    getProduct(params.id as string)
+    getProduct(id)
       .then(setData)
       .catch((err) => {
         console.error(err);
         toast.error("Failed to load product data");
       });
-  }, [params]);
+  }, [params?.id]); // 3. Dependencia más específica
 
   async function handleSubmit(form: any) {
+    // 4. Verificación de seguridad antes de llamar a la API
+    const id = params?.id;
+    if (!id) return;
+
     try {
       setLoading(true);
-
-      // 👁️ REVISIÓN EN VIVO: Apaga el switch en la pantalla y dale a guardar.
-      console.log("PAYLOAD QUE SALE DEL FORMULARIO:", form);
-
-      await updateProduct(params.id as string, form);
+      await updateProduct(id, form);
       toast.success("Product updated successfully");
       router.push("/products");
     } catch (err: any) {

@@ -1,20 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation"; // 1. Importa useParams
 import { useAuth } from "@/hooks/useAuth";
 import Receipt from "@/components/Receipt";
 
-export default function InvoicePage({ params }: { params: { id: string } }) {
+// 2. Elimina { params } de las props
+export default function InvoicePage() {
+  const params = useParams<{ id: string }>(); // 3. Obtén el id desde aquí
+  const id = params?.id;
+
   const [data, setData] = useState<any>(null);
   const { loading: authLoading } = useAuth();
   const API = process.env.NEXT_PUBLIC_API_URL;
 
   useEffect(() => {
-    fetch(`${API}/sales/${params.id}/invoice`)
+    if (!id) return; // 4. Valida que el ID exista
+
+    fetch(`${API}/sales/${id}/invoice`)
       .then((res) => res.json())
       .then((json) => setData(json))
       .catch((err) => console.error(err));
-  }, [params.id, API]);
+  }, [id, API]); // 5. Usa 'id' en el array de dependencias
 
   if (authLoading || !data) {
     return (

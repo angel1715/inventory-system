@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react"; // 1. Importa 'use'
 import { useParams } from "next/navigation";
 
 export default function InvoicePage() {
-  const { id } = useParams();
+  // 2. Si es una página dinámica con [id], asegúrate de obtener el id así:
+  const params = useParams(); 
+  const id = params.id as string; // Aseguramos que id sea string
 
   const [invoice, setInvoice] = useState<any>(null);
 
   useEffect(() => {
+    if (!id) return; // 3. Protegemos el fetch si el id aún no está
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/sales/${id}/invoice`)
       .then((r) => r.json())
       .then(setInvoice);
-  }, []);
+  }, [id]); // 4. Agregamos [id] como dependencia
 
   if (!invoice) return <p>Loading...</p>;
 

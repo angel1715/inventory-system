@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react"; // Quitamos 'use'
 import {
   getServiceOrder,
   addServiceItem,
@@ -12,13 +12,14 @@ import {
 } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, ArrowLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation"; // Agregamos useParams
 
-export default function ServiceOrderDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function ServiceOrderDetailPage() {
+  // --- INICIO DEL BLOQUE AJUSTADO ---
+  const params = useParams<{ id: string }>();
+  const id = params?.id as string;
+  // --- FIN DEL BLOQUE AJUSTADO ---
+
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -36,9 +37,6 @@ export default function ServiceOrderDetailPage({
   const [newStatus, setNewStatus] = useState("RECEIVED");
   const [changeNote, setChangeNote] = useState("");
 
-  const resolvedParams = use(params);
-  const id = resolvedParams.id;
-
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState({
     deviceBrand: "",
@@ -48,10 +46,13 @@ export default function ServiceOrderDetailPage({
   });
 
   useEffect(() => {
-    loadOrder();
+    if (id) {
+      loadOrder();
+    }
   }, [id]);
 
   async function loadOrder() {
+    if (!id) return;
     setLoading(true);
     try {
       const data = await getServiceOrder(id);
@@ -162,7 +163,6 @@ export default function ServiceOrderDetailPage({
     return (
       <div className="p-8 text-gray-500 text-center">Orden no encontrada.</div>
     );
-
   return (
     <div className="p-8 max-w-5xl mx-auto min-h-screen bg-gray-50">
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mb-6">
