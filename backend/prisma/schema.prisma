@@ -1,0 +1,619 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum Role {
+  OWNER
+  EMPLOYEE
+}
+
+enum ExpenseCategory {
+  RENT
+  UTILITIES
+  INTERNET
+  PAYROLL
+  TRANSPORT
+  MARKETING
+  OTHER
+}
+
+enum MovementType {
+  SALE
+  PURCHASE
+  RESTOCK
+  ADJUSTMENT
+  RETURN
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  CREDIT
+}
+
+enum CashStatus {
+  OPEN
+  CLOSED
+}
+
+enum PurchaseStatus {
+  DRAFT
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum NcfType {
+  B01
+  B02
+  B14
+  B15
+}
+
+enum ServiceStatus {
+  RECEIVED
+  DIAGNOSING
+  WAITING_PARTS
+  REPAIRED
+  DELIVERED
+  CANCELLED
+}
+
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum CreditMovementType {
+  CHARGE
+  PAYMENT
+}
+
+enum ProductCategory {
+  SPARE_PART
+  ACCESSORY
+  DEVICE
+  SERVICE
+  OTHER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+  INCOMPLETE
+}
+
+// ==========================================
+// MODELS
+// ==========================================
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  phone     String?
+  email     String?
+  address   String?
+  logoUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  products           Product[]
+  suppliers          Supplier[]
+  sales              Sale[]
+  cashSessions       CashSession[]
+  expenses           Expense[]
+  purchases          Purchase[]
+  inventoryMovements InventoryMovement[]
+  customers          Customer[]          @relation("BusinessCustomers")
+  creditAccounts     CreditAccount[]     @relation("BusinessCredits")
+  ncfSequences       NcfSequence[]       @relation("BusinessNcf")
+  serviceOrders      ServiceOrder[]      @relation("BusinessServices")
+  settings           BusinessSettings?
+  subscription       Subscription?
+}
+
+model BusinessSettings {
+  id            String   @id @default(cuid())
+  businessName  String
+  tradeName     String?
+  rnc           String?
+  phone         String?
+  email         String?
+  website       String?
+  instagram     String?
+  facebook      String?
+  address       String?
+  city          String?
+  country       String?
+  logoUrl       String?
+  taxRate       Float    @default(18)
+  currency      String   @default("DOP")
+  invoiceFooter String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+}
+
+model Subscription {
+  id String @id @default(cuid())
+
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  userId String? @unique
+  user   User?   @relation("UserSubscription", fields: [userId], references: [id])
+
+  status               SubscriptionStatus
+  plan                 String
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+} 
+ 
+model User {
+  id               String   @id @default(cuid())
+  name             String
+  email            String   @unique
+  stripeCustomerId String?  @unique
+  password         String
+  role             Role     @default(OWNER)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
+
+  subscription Subscription? @relation("UserSubscription")
+
+  passwordResetTokens PasswordResetToken[]
+
+  sales              Sale[]
+  cashSessions       CashSession[]
+  auditLogs          AuditLog[]
+  inventoryMovements InventoryMovement[]
+  assignedServices   ServiceOrder[]       @relation("TechnicianServices")
+  createdReceivables AccountsReceivable[] @relation("ReceivableCreatedBy")
+  serviceLogs        ServiceLog[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique // Aquí guardaremos el hash del token
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token]) // Optimiza la búsqueda al validar el token
+  @@map("password_reset_tokens")
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  products  Product[]
+  purchases Purchase[]
+
+  @@index([businessId])
+}
+
+model Product {
+  id          String          @id @default(cuid())
+  status      String          @default("AVAILABLE")
+  sku         String?         @unique
+  barcode     String?         @unique
+  name        String
+  description String?
+  costPrice   Decimal
+  salePrice   Decimal
+  stock       Int
+  minStock    Int
+  active      Boolean         @default(true)
+  imageUrl    String?
+  category    ProductCategory @default(OTHER)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  isSerialized Boolean   @default(false)
+  hasExpiry    Boolean   @default(false)
+  expiryDate   DateTime?
+  lotNumber    String?
+
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+
+  itemSerials    ItemSerial[]
+  productBatches ProductBatch[]
+  inventoryMoves InventoryMovement[]
+  purchaseItems  PurchaseItem[]
+  saleItems      SaleItem[]
+  serviceItems   ServiceItem[]
+
+  @@index([businessId])
+  @@index([barcode])
+  @@index([name])
+}
+
+model ItemSerial {
+  id     String  @id @default(cuid())
+  serial String
+  isSold Boolean @default(false)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  purchaseItemId String?
+  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+
+  saleItemId String?
+  createdAt  DateTime @default(now())
+
+  @@unique([serial, productId])
+}
+
+model ProductBatch {
+  id              String   @id @default(cuid())
+  batchNumber     String
+  expiryDate      DateTime
+  initialQuantity Int
+  currentQuantity Int
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  purchaseItemId String?
+  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model Customer {
+  id      String  @id @default(cuid())
+  name    String
+  phone   String?
+  active  Boolean @default(true)
+  taxId   String?
+  email   String?
+  address String?
+
+  businessId String
+  business   Business @relation("BusinessCustomers", fields: [businessId], references: [id], onDelete: Restrict)
+
+  sales               Sale[]
+  creditAccount       CreditAccount?
+  serviceOrders       ServiceOrder[]
+  accountsReceivables AccountsReceivable[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@unique([businessId, taxId])
+  @@index([name])
+}
+
+model CreditAccount {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  businessId String
+  business   Business @relation("BusinessCredits", fields: [businessId], references: [id], onDelete: Restrict)
+
+  maxCredit   Decimal @default(0.00)
+  currentDebt Decimal @default(0.00)
+
+  movements CreditMovement[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([customerId])
+  @@index([businessId])
+}
+
+model CreditMovement {
+  id                  String             @id @default(cuid())
+  creditAccountId     String
+  creditAccount       CreditAccount      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
+  type                CreditMovementType
+  amount              Decimal
+  currentDebtSnapshot Decimal
+  note                String?
+  saleId              String?
+  sale                Sale?              @relation(fields: [saleId], references: [id])
+  cashSessionId       String?
+  createdAt           DateTime           @default(now())
+
+  @@index([creditAccountId])
+}
+
+model NcfSequence {
+  id         String   @id @default(uuid())
+  businessId String
+  type       String
+  prefix     String
+  current    Int
+  startAt    Int
+  endAt      Int
+  expiryDate DateTime
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation("BusinessNcf", fields: [businessId], references: [id], onDelete: Restrict)
+  sales    Sale[]
+
+  @@index([businessId, type, active])
+}
+
+model CashMovement {
+  id            String      @id @default(cuid())
+  cashSessionId String
+  cashSession   CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  type          String
+  amount        Decimal
+  description   String
+  userId        String
+  createdAt     DateTime    @default(now())
+
+  @@index([cashSessionId])
+}
+
+model Sale {
+  id             String @id @default(cuid())
+  invoiceNumber  String
+  businessId     String
+  idempotencyKey String
+
+  ncf           String?
+  ncfType       String?
+  ncfSequenceId String?
+  ncfSequence   NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
+
+  subtotal      Decimal
+  tax           Decimal
+  discount      Decimal
+  total         Decimal
+  paymentMethod PaymentMethod
+
+  cashSessionId String?
+  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  createdById   String?
+  createdBy     User?        @relation(fields: [createdById], references: [id])
+
+  isCreditSale       Boolean             @default(false)
+  customerId         String?
+  customer           Customer?           @relation(fields: [customerId], references: [id])
+  creditMovements    CreditMovement[]
+  items              SaleItem[]
+  accountsReceivable AccountsReceivable?
+  createdAt          DateTime            @default(now())
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id           String  @id @default(cuid())
+  saleId       String
+  productId    String
+  quantity     Int
+  salePrice    Decimal
+  lineTotal    Decimal
+  serialNumber String?
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+}
+
+model ServiceOrder {
+  id           String   @id @default(cuid())
+  ticketNumber String
+  businessId   String
+  business     Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  technicianId String?
+  technician   User?   @relation("TechnicianServices", fields: [technicianId], references: [id])
+  deliveredAt DateTime?
+  deviceBrand  String
+  deviceModel  String
+  serialOrImei String?
+  problem      String
+  diagnostic   String?
+  laborCost    Decimal       @default(0.00)
+  totalAmount  Decimal       @default(0.00)
+  status       ServiceStatus @default(RECEIVED)
+
+  items ServiceItem[]
+  logs  ServiceLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessId, ticketNumber])
+  @@index([businessId])
+}
+
+model ServiceItem {
+  id             String       @id @default(cuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
+  productId      String
+  product        Product      @relation(fields: [productId], references: [id])
+  quantity       Int          @default(1)
+  priceUnit      Decimal
+}
+
+model ServiceLog {
+  id             String       @id @default(cuid())
+  serviceOrderId String
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
+  statusFrom     String
+  statusTo       String
+  note           String?
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+model InventoryMovement {
+  id            String       @id @default(cuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  userId        String?
+  user          User?        @relation(fields: [userId], references: [id])
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  type          MovementType
+  quantity      Int
+  previousStock Int?
+  newStock      Int?
+  note          String?
+  createdAt     DateTime     @default(now())
+
+  @@index([productId])
+}
+
+model AccountsReceivable {
+  id             String           @id @default(cuid())
+  saleId         String           @unique
+  sale           Sale             @relation(fields: [saleId], references: [id])
+  customerId     String
+  customer       Customer         @relation(fields: [customerId], references: [id])
+  originalAmount Decimal
+  paidAmount     Decimal          @default(0)
+  pendingAmount  Decimal
+  status         ReceivableStatus
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  notes          String?
+  createdById    String?
+  createdBy      User?            @relation("ReceivableCreatedBy", fields: [createdById], references: [id])
+  dueDate        DateTime
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model Purchase {
+  id            String         @id @default(cuid())
+  invoiceNumber String
+  total         Decimal
+  status        PurchaseStatus @default(COMPLETED)
+  businessId    String
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplierId    String
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  items         PurchaseItem[]
+  createdAt     DateTime       @default(now())
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId])
+}
+
+model PurchaseItem {
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  costPrice  Decimal
+  total      Decimal
+
+  serials ItemSerial[]
+  batches ProductBatch[]
+}
+
+model CashSession {
+  id            String         @id @default(cuid())
+  openingAmount Decimal
+  expectedCash  Decimal?
+  actualCash    Decimal?
+  difference    Decimal?
+  openedAt      DateTime       @default(now())
+  closedAt      DateTime?
+  status        CashStatus
+  userId        String
+  user          User           @relation(fields: [userId], references: [id])
+  businessId    String
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  sales         Sale[]
+  expenses      Expense[]
+  cashMovements CashMovement[]
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  title         String
+  description   String?
+  amount        Decimal
+  category      ExpenseCategory
+  businessId    String
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  createdAt     DateTime        @default(now())
+  cashSessionId String?
+  cashSession   CashSession?    @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
+
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entity      String
+  entityId    String?
+  description String?
+  userId      String
+  businessId  String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@index([userId])
+}
