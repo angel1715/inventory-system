@@ -29,7 +29,7 @@ export class ProductsController {
     // CREATE PRODUCT
     // ======================
     @Post()
-    @Roles("OWNER", 'ADMIN')
+    @Roles("OWNER")
     create(
         @Body() dto: CreateProductDto,
         @Request() req: any,
