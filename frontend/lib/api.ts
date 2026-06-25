@@ -500,7 +500,7 @@ export async function resetPassword(token: string, password: string) {
 }
 
 // =========================
-// INVITATIONS
+// INVITATIONS (Sincronizadas con prefijo /auth)
 // =========================
 
 /**
@@ -508,7 +508,7 @@ export async function resetPassword(token: string, password: string) {
  * Requiere permisos de administrador.
  */
 export const generateInvitation = () =>
-  request("/generate-invitation", {
+  request("/auth/generate-invitation", {
     method: "POST",
   });
 
@@ -517,10 +517,10 @@ export const generateInvitation = () =>
  * Requiere permisos de administrador.
  */
 export const getInvitations = () =>
-  request("/invitations");
+  request("/auth/invitations");
 
-// =========================
-// INVITATIONS (Público)
-// =========================
+/**
+ * Valida un token de invitación antes del registro.
+ */
 export const validateInvitationToken = (token: string) =>
   request(`/auth/validate-invitation/${token}`);

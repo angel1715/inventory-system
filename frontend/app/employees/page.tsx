@@ -129,7 +129,7 @@ export default function EmployeesPage() {
 
   return (
     <ProtectedRoute>
-      <RoleGuard roles={["OWNER"]}>
+      <RoleGuard roles={["OWNER", "ADMIN"]}>
         <div className="min-h-screen bg-gray-50 p-8 animate-in fade-in duration-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>

@@ -42,6 +42,11 @@ export default function RegisterPage() {
     checkToken();
   }, [token]);
 
+  // Añade esto debajo de tu primer useEffect de validación
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, token: token }));
+  }, [token]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);

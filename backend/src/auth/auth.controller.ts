@@ -29,7 +29,7 @@ export class AuthController {
 
   // Método privado auxiliar para validación de administrador
   private validateAdmin(user: any) {
-    if (user.email !== process.env.ADMIN_EMAIL) {
+    if (user.role !== "ADMIN") {
       throw new ForbiddenException("No tienes permisos de administrador");
     }
   }

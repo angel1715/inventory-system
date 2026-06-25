@@ -15,7 +15,7 @@ export type User = {
   name: string;
   email: string;
   subscriptionStatus: string;
-  role: "OWNER" | "EMPLOYEE";
+  role: "OWNER" | "ADMIN" | "EMPLOYEE";
   businessId?: string | null;
   active: boolean;
 };

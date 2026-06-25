@@ -23,7 +23,9 @@ export function middleware(req: NextRequest) {
     }
 
     // Si ya tienes token y estás en login/register, vete al dashboard
-    if (token && (pathname === "/login" || pathname === "/register")) {
+    // Si ya tienes token y estás en login, vete al dashboard. 
+    // (Quitamos /register para que no te redirija si eres admin y quieres registrar a alguien más)
+    if (token && pathname === "/login") {
         return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 

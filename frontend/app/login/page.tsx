@@ -117,14 +117,6 @@ export default function LoginPage() {
 
             {/* Enlaces */}
             <div className="flex flex-col items-center gap-4 pt-4">
-              <Link
-                href="/register"
-                className="text-zinc-600 hover:text-zinc-900 text-sm transition-colors"
-              >
-                ¿No tienes cuenta?{" "}
-                <span className="text-blue-600 font-medium">Regístrate</span>
-              </Link>
-
               <a
                 href="/forgot-password"
                 className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors"

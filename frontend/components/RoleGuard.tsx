@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/app/context/AuthContext";
 import { ReactNode } from "react";
-import { ShieldAlert } from "lucide-react"; // O cualquier icono que tengas
+import { ShieldAlert } from "lucide-react";
 
 type Props = {
   roles: string[];
@@ -12,12 +12,17 @@ type Props = {
 export default function RoleGuard({ roles, children }: Props) {
   const { user, loading } = useAuth();
 
-  if (loading) return null; // O un spinner de carga
-
+  if (loading) return null;
   if (!user) return null;
 
-  // Si el usuario no tiene el rol permitido, mostramos un mensaje de error visual
-  if (!roles.includes(user.role)) {
+  // Lógica de "Super Usuario":
+  // Si el usuario es ADMIN, le damos acceso total inmediatamente.
+  const isAdmin = user.role === "ADMIN";
+
+  // Si no es ADMIN, verificamos si su rol está en la lista permitida.
+  const hasRequiredRole = roles.includes(user.role);
+
+  if (!isAdmin && !hasRequiredRole) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="text-center bg-white p-10 rounded-3xl shadow-xl border border-gray-100 max-w-sm">
@@ -26,7 +31,7 @@ export default function RoleGuard({ roles, children }: Props) {
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Acceso Denegado</h2>
           <p className="text-gray-500 mt-2">
-            No tienes permisos para ver esta sección.
+            No tienes permisos suficientes para ver esta sección.
           </p>
         </div>
       </div>
