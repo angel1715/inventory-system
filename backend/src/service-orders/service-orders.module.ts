@@ -1,22 +1,23 @@
 import { Module } from "@nestjs/common";
-
+import { SubscriptionModule } from '../subscription/subscription.module';
 import { PrismaService } from "../prisma/prisma.service";
 
 import { ServiceOrdersController } from "./service-orders.controller";
 import { ServiceOrdersService } from "./service-orders.service";
 
 @Module({
-controllers: [
-ServiceOrdersController,
-],
+    imports: [SubscriptionModule],
+    controllers: [
+        ServiceOrdersController,
+    ],
 
-providers: [
-ServiceOrdersService,
-PrismaService,
-],
+    providers: [
+        ServiceOrdersService,
+        PrismaService,
+    ],
 
-exports: [
-ServiceOrdersService,
-],
+    exports: [
+        ServiceOrdersService,
+    ],
 })
-export class ServiceOrdersModule {}
+export class ServiceOrdersModule { }

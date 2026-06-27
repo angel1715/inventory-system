@@ -14,8 +14,9 @@ import { PurchasesService } from "./purchases.service";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 
 import { CreatePurchaseDto } from "./dto/create-purchase.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Controller("purchases")
 export class PurchasesController {
 

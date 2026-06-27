@@ -1,6 +1,7 @@
 import Cookies from "js-cookie";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
+export type SubscriptionStatus = 'ACTIVE' | 'EXPIRED';
 
 // =========================
 // TOKEN (Sincronizado con Cookies)
@@ -15,31 +16,34 @@ export function getToken() {
 async function request(endpoint: string, options: RequestInit = {}) {
   const isAuthEndpoint =
     endpoint.includes("/auth/login") ||
-    endpoint.includes("/auth/register");
-  endpoint.includes("/auth/forgot-password") || // <--- Agrégalo aquí
-    endpoint.includes("/auth/reset-password");    // <--- Agrégalo aquí
+    endpoint.includes("/auth/register") ||
+    endpoint.includes("/auth/forgot-password") ||
+    endpoint.includes("/auth/reset-password");
 
-  // Usamos nuestra función getToken sincronizada
   const token = getToken();
+
+  // DETECCIÓN: Es FormData si el body es instancia de FormData
   const isFormData = options.body instanceof FormData;
 
   const headers: Record<string, string> = {
-    // 2. Solo añadir Content-Type: application/json si NO es FormData
+    // ⚠️ IMPORTANTE: Solo ponemos JSON si NO es FormData.
+    // Si es FormData, dejamos que el navegador ponga el Content-Type (y el boundary)
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as any),
   };
 
+  // Solo inyectamos el token si no es un endpoint público
   if (!isAuthEndpoint && token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API}${endpoint}`, {
     ...options,
-    // 3. Añadir credentials: 'include' para que las cookies viajen siempre
     credentials: 'include',
     headers,
   });
 
+  // ... (resto de tu lógica de respuesta sigue igual)
   let data: any = null;
   const contentType = res.headers.get("content-type");
 
@@ -50,14 +54,11 @@ async function request(endpoint: string, options: RequestInit = {}) {
   }
 
   if (!res.ok) {
-    console.log("API ERROR:", data);
-    console.log("STATUS:", res.status);
     throw new Error(data?.message || data?.error || "Request failed");
   }
 
   return data;
 }
-
 // =========================
 // AUTH
 // =========================
@@ -524,3 +525,37 @@ export const getInvitations = () =>
  */
 export const validateInvitationToken = (token: string) =>
   request(`/auth/validate-invitation/${token}`);
+
+// =========================
+// SUBSCRIPTION: PAGOS MANUALES
+// =========================
+
+/**
+ * Sube un comprobante de pago manual (transferencia).
+ * El parámetro 'data' debe ser un objeto FormData con los campos:
+ * 'amount', 'referenceNumber' y 'file'.
+ */
+export const uploadReceipt = (data: FormData) =>
+  request("/subscription/upload-receipt", {
+    method: "POST",
+    body: data,
+    // NO agregues 'Content-Type': 'multipart/form-data' aquí, 
+    // el navegador lo hace solo con el boundary correcto.
+  });
+
+// En lib/api.ts
+export const getPendingPayments = () => request("/subscription/pending-payments");
+
+export const approveManualPayment = (businessId: string, paymentLogId: string) =>
+  request(`/subscription/approve/${businessId}/${paymentLogId}`, { method: "POST" });
+
+export const toggleSubscriptionStatus = (businessId: string, status: SubscriptionStatus) =>
+  request(`/subscription/toggle-status/${businessId}`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
+
+/**
+* Obtiene el listado de todas las suscripciones con la información del negocio relacionado.
+*/
+export const getAllSubscriptions = () => request("/subscription/all-subscriptions");

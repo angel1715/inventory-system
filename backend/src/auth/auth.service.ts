@@ -21,78 +21,85 @@ export class AuthService {
   ) { }
 
   async register(data: RegisterDto) {
-  const email = data.email.trim().toLowerCase();
+    const email = data.email.trim().toLowerCase();
 
-  return await this.prisma.$transaction(async (tx) => {
-    // 1. Buscar y validar la invitación DENTRO de la transacción
-    const invitation = await tx.invitation.findUnique({
-      where: { token: data.token }
-    });
+    return await this.prisma.$transaction(async (tx) => {
+      // 1. Buscar y validar la invitación DENTRO de la transacción
+      const invitation = await tx.invitation.findUnique({
+        where: { token: data.token }
+      });
 
-    if (!invitation || invitation.used || invitation.expiresAt < new Date()) {
-      throw new ForbiddenException("Invitación no válida o expirada");
-    }
+      if (!invitation || invitation.used || invitation.expiresAt < new Date()) {
+        throw new ForbiddenException("Invitación no válida o expirada");
+      }
 
-    // 2. Verificar usuario existente
-    const exists = await tx.user.findUnique({ where: { email } });
-    if (exists) throw new BadRequestException("El correo ya está en uso");
+      // 2. Verificar usuario existente
+      const exists = await tx.user.findUnique({ where: { email } });
+      if (exists) throw new BadRequestException("El correo ya está en uso");
 
-    // 3. Marcar invitación como usada
-    await tx.invitation.update({
-      where: { id: invitation.id },
-      data: { used: true }
-    });
+      // 3. Marcar invitación como usada
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: { used: true }
+      });
 
-    // 4. Crear el negocio
-    const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
-    const business = await tx.business.create({
-      data: { name: data.businessName.trim(), slug },
-    });
+      // 4. Crear el negocio
+      const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
+      const business = await tx.business.create({
+        data: { name: data.businessName.trim(), slug },
+      });
 
-    // 5. Crear configuraciones base
-    await tx.businessSettings.create({
-      data: { businessId: business.id, businessName: data.businessName.trim() }
-    });
+      // 5. Crear configuraciones base
+      await tx.businessSettings.create({
+        data: { businessId: business.id, businessName: data.businessName.trim() }
+      });
 
-    // 6. Crear el usuario
-    const hashedPassword = await bcrypt.hash(data.password, 12);
-    const user = await tx.user.create({
-      data: {
-        name: data.name.trim(),
-        email,
-        password: hashedPassword,
-        role: "OWNER",
-        active: true,
-        businessId: business.id,
-      },
-    });
+      // 6. Crear el usuario
+      const hashedPassword = await bcrypt.hash(data.password, 12);
+      const user = await tx.user.create({
+        data: {
+          name: data.name.trim(),
+          email,
+          password: hashedPassword,
+          role: "OWNER",
+          active: true,
+          businessId: business.id,
+        },
+      });
 
-    // 7. Generar token JWT
-    const jwtToken = await this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      businessId: business.id,
-    });
-
-    return {
-      token: jwtToken,
-      user: {
-        id: user.id,
-        name: user.name,
+      // 7. Generar token JWT
+      const jwtToken = await this.jwtService.signAsync({
+        sub: user.id,
         email: user.email,
         role: user.role,
-        businessId: business.id
-      },
-    };
-  });
-}
+        businessId: business.id,
+      });
 
+      return {
+        token: jwtToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          businessId: business.id
+        },
+      };
+    });
+  }
+
+  // En auth.service.ts - Método login
   async login(email: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: { business: { include: { subscription: true } } }
+      include: {
+        business: {
+          include: {
+            subscription: true // Ahora funcionará porque la columna ya existe tras el db push
+          }
+        }
+      }
     });
 
     if (!user || !user.active) throw new UnauthorizedException("Credenciales inválidas");
@@ -103,6 +110,13 @@ export class AuthService {
     const subscription = user.business?.subscription ??
       await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
 
+    // Lógica dinámica para el estado de la suscripción
+    const now = new Date();
+    const isActive = subscription && (
+      subscription.accessType === 'LIFETIME' ||
+      (subscription.currentPeriodEnd > now)
+    );
+
     const token = await this.jwtService.signAsync({
       sub: user.id, email: user.email, role: user.role, businessId: user.businessId,
     });
@@ -112,7 +126,7 @@ export class AuthService {
       user: {
         id: user.id, name: user.name, email: user.email, role: user.role,
         businessId: user.businessId,
-        subscriptionStatus: subscription?.status ?? "INACTIVE",
+        subscriptionStatus: isActive ? "ACTIVE" : "INACTIVE", // Ajustado aquí
       },
     };
   }

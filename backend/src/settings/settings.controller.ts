@@ -14,8 +14,9 @@ import { JwtAuthGuard } from "../auth/jwt.guard";
 import { Roles } from "../auth/roles.decorator";
 import { UpdateSettingsDto } from "./dto/create-settings.dto";
 import { Prisma } from "@prisma/client";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Roles("OWNER")
 @Controller("settings")
 export class SettingsController {

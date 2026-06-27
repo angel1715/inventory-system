@@ -15,8 +15,9 @@ import { SuppliersService } from "./suppliers.service";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Controller("suppliers")
 export class SuppliersController {
 

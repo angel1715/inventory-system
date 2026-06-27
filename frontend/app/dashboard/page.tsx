@@ -35,6 +35,8 @@ import { getDashboard, getCashSession, getLowStockProducts } from "@/lib/api";
 import CashControl from "@/components/CashControl";
 import RoleGuard from "@/components/RoleGuard";
 import Receipt from "@/components/Receipt";
+import AdminSubscriptionList from "@/components/admin/AdminSubscriptionList";
+import SubscriptionManager from "@/components/admin/SubscriptionManager";
 
 const COLORS = [
   "#6366f1",
@@ -60,15 +62,15 @@ export default function DashboardPage() {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
- useEffect(() => {
-  setMounted(true);
-  // Cambiamos la comparación de email por la validación de rol
-  if (user?.role === "ADMIN") {
-    setIsAdmin(true);
-  } else {
-    setIsAdmin(false);
-  }
-}, [user]);
+  useEffect(() => {
+    setMounted(true);
+    // Cambiamos la comparación de email por la validación de rol
+    if (user?.role === "ADMIN") {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
+    }
+  }, [user]);
 
   async function load(currentRange: typeof range) {
     try {
@@ -128,6 +130,7 @@ export default function DashboardPage() {
             <h1 className="text-4xl font-semibold tracking-tighter text-zinc-900">
               Dashboard
             </h1>
+
             <p className="text-zinc-500 mt-1">
               Resumen en tiempo real •{" "}
               {mounted &&
@@ -326,8 +329,27 @@ export default function DashboardPage() {
         </div>
 
         {isAdmin && (
-          <div className="mt-8 pt-8 border-t border-dashed border-zinc-300">
-            <InvitationManager />
+          <div className="space-y-8">
+            {/* Sección de Invitaciones */}
+            <div className="mt-8 pt-8 border-t border-dashed border-zinc-300">
+              <h3 className="text-lg font-semibold mb-4">
+                Gestión de Usuarios
+              </h3>
+              <InvitationManager />
+            </div>
+
+            {/* Sección de Suscripciones Pendientes */}
+            <div className="mt-8 pt-8 border-t border-dashed border-zinc-300">
+              <h3 className="text-lg font-semibold mb-4">
+                Pagos de Suscripción
+              </h3>
+              <AdminSubscriptionList />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
+              <SubscriptionManager />{" "}
+              {/* Panel de control de todos los clientes */}
+            </div>
           </div>
         )}
       </div>

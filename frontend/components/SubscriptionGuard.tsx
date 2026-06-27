@@ -12,14 +12,18 @@ export default function SubscriptionGuard({
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user && user.subscriptionStatus !== "ACTIVE") {
-      router.replace("/subscription/pricing");
+    if (!loading && user) {
+      if (user.subscriptionStatus === "PENDING") {
+        router.replace("/subscription/waiting-approval");
+      } else if (user.subscriptionStatus !== "ACTIVE") {
+        router.replace("/subscription/pricing");
+      }
     }
   }, [loading, user, router]);
 
-  if (loading) return null; // Deja que el layout gestione el estado de carga
-
-  if (user && user.subscriptionStatus !== "ACTIVE") return null;
+  if (loading)
+    return <div className="flex justify-center p-10">Cargando...</div>;
+  if (!user || user.subscriptionStatus !== "ACTIVE") return null;
 
   return <>{children}</>;
 }

@@ -1,32 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const protectedRoutes = [
-    "/dashboard",
-    "/pos",
-    "/products",
-    "/sales",
-    "/cash",
-    "/expenses",
-    "/suppliers",
-    "/purchases",
-];
+const protectedRoutes = ["/dashboard", "/pos", "/products", "/sales", "/cash", "/expenses", "/suppliers", "/purchases"];
 
 export function middleware(req: NextRequest) {
     const token = req.cookies.get("token")?.value;
+    const subStatus = req.cookies.get("subStatus")?.value;
     const { pathname } = req.nextUrl;
 
-    const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
+    // 1. Permitir acceso libre a páginas públicas
+    if (pathname === "/login" || pathname === "/pricing" || pathname === "/register") {
+        // Si el usuario ya está logueado y va a login, redirigir al dashboard
+        if (token && pathname === "/login") {
+            return NextResponse.redirect(new URL("/dashboard", req.url));
+        }
+        return NextResponse.next();
+    }
 
-    // Si intentas entrar a una protegida y NO tienes token, vete al login
+    // 2. Si no hay token y la ruta es protegida, enviar a login
+    const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
     if (isProtected && !token) {
         return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    // Si ya tienes token y estás en login/register, vete al dashboard
-    // Si ya tienes token y estás en login, vete al dashboard. 
-    // (Quitamos /register para que no te redirija si eres admin y quieres registrar a alguien más)
-    if (token && pathname === "/login") {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
+    // 3. Si tiene token pero la suscripción no es ACTIVE, forzar a /pricing
+    if (token && subStatus !== "ACTIVE" && pathname !== "/pricing") {
+        return NextResponse.redirect(new URL("/pricing", req.url));
     }
 
     return NextResponse.next();
@@ -34,15 +32,6 @@ export function middleware(req: NextRequest) {
 
 export const config = {
     matcher: [
-        "/dashboard/:path*",
-        "/pos/:path*",
-        "/products/:path*",
-        "/sales/:path*",
-        "/cash/:path*",
-        "/expenses/:path*",
-        "/suppliers/:path*",
-        "/purchases/:path*",
-        "/login",
-        "/register",
+        "/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$).*)",
     ],
 };

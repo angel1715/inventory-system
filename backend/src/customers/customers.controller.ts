@@ -2,10 +2,11 @@ import { Controller, Post, Get, Body, Param, UseGuards, Req, Put, Patch } from "
 import { CustomersService } from "./customers.service";
 import { CreateCustomerDto, RecordPaymentDto } from "./dto/customer.dto";
 import { JwtAuthGuard } from "../auth/jwt.guard";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 // Asumiendo que usas los nombres estándar de tus JwtGuards
 
 @Controller("customers")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class CustomersController {
     constructor(private readonly customersService: CustomersService) { }
 

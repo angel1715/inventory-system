@@ -7,9 +7,10 @@ import {
 
 import { ReportsService } from "./reports.service";
 import { JwtAuthGuard } from "../auth/jwt.guard";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Controller("reports")
 export class ReportsController {
     constructor(

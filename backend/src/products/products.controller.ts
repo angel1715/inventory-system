@@ -17,8 +17,9 @@ import { ProductsService } from "./products.service";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { Roles } from "../auth/roles.decorator";
 import { CreateProductDto } from "./dto/create-product.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Controller("products")
 export class ProductsController {
     constructor(

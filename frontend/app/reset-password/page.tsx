@@ -14,16 +14,23 @@ function ResetPasswordContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
-    setLoading(true);
+    if (password.length < 6) {
+      // Validación simple de seguridad
+      alert("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
 
+    setLoading(true);
     try {
       await resetPassword(token, password);
-      alert("¡Contraseña actualizada! Ya puedes iniciar sesión.");
+      alert("¡Contraseña actualizada con éxito! Ya puedes iniciar sesión.");
       router.push("/login");
     } catch (error: any) {
+      // Si falla, es probable que el token haya expirado
       alert(
-        "Error al actualizar la contraseña. El token podría haber expirado.",
+        "El enlace ha expirado o ya fue utilizado. Por favor, solicita uno nuevo.",
       );
+      router.push("/forgot-password");
     } finally {
       setLoading(false);
     }

@@ -1,66 +1,70 @@
-import { Controller, Post, Headers as NestHeaders, Req, BadRequestException, UseGuards, Body } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Param, Get, BadRequestException } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
-import { StripeWebhookService } from './stripe.webhook.service';
-import Stripe from 'stripe';
+import { UploadReceiptDto } from './dto/upload-receipt.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
-
-// Usamos una constante inicializada de forma segura
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2026-05-27.dahlia',
-});
+import { Roles } from '../auth/roles.decorator';
+import { UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @Controller('subscription')
 export class SubscriptionController {
-    constructor(
-        private readonly subscriptionService: SubscriptionService,
-        private readonly stripeWebhookService: StripeWebhookService
-    ) { }
-
-    @Post('webhook')
-    async handleStripeWebhook(
-        @Req() req: any,
-        @NestHeaders('stripe-signature') signature: string
-    ) {
-        if (!signature) throw new BadRequestException('Missing stripe-signature header');
-        if (!req.rawBody) throw new BadRequestException('Webhook requires rawBody');
-
-        let event: any;
-        try {
-            event = stripe.webhooks.constructEvent(
-                req.rawBody,
-                signature,
-                process.env.STRIPE_WEBHOOK_SECRET!
-            );
-        } catch (err: any) {
-            console.error(`Webhook Error: ${err.message}`);
-            throw new BadRequestException(`Webhook Error: ${err.message}`);
-        }
-
-        await this.stripeWebhookService.handleEvent(event);
-        return { received: true };
-    }
+    constructor(private readonly subscriptionService: SubscriptionService) { }
 
     @UseGuards(JwtAuthGuard)
-    @Post('create-checkout-session')
-    async createCheckoutSession(
-        @Req() req: any,
-        @Body('priceId') priceId: string // <--- CAPTURAR EL DATO AQUÍ
+    @Post('upload-receipt')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadReceipt(
+        @Request() req,
+        @Body() dto: any, // Aquí recibiremos el monto y la referencia
+        @UploadedFile() file: Express.Multer.File // Aquí recibimos el archivo
     ) {
-        const user = req.user;
+        if (!file) throw new BadRequestException('El comprobante es obligatorio');
 
-        if (!user || !user.id) {
-            throw new BadRequestException('User information missing');
-        }
+        // Aquí, en lugar de pasar solo el DTO, pasas el archivo o su ruta
+        // Para simplificar, puedes pasar el nombre del archivo o guardarlo en S3/servidor
+        const businessId = req.user.businessId;
 
-        if (!priceId) {
-            throw new BadRequestException('Price ID is required');
-        }
+        // Asumiendo que guardas el archivo en tu servidor o procesas el nombre
+        return await this.subscriptionService.createManualPaymentLog(businessId, {
+            ...dto,
+            receiptUrl: file.originalname // O la ruta donde lo guardes
+        });
+    }
 
-        return await this.subscriptionService.createCheckoutSession(
-            user.id,
-            user.email,
-            user.businessId,
-            priceId // <--- PASARLO AL SERVICIO
-        );
+    @Get('all-subscriptions')
+    @Roles('ADMIN')
+    async getAllSubscriptions() {
+        return await this.subscriptionService.getAllSubscriptions();
+    }
+
+    @Post('manual-reactivate/:businessId')
+    @Roles('ADMIN')
+    async manualReactivate(@Param('businessId') businessId: string) {
+        return await this.subscriptionService.reactivateSubscription(businessId);
+    }
+
+    @Get('pending-payments')
+    @Roles('ADMIN')
+    async getPendingPayments() {
+        return await this.subscriptionService.getPendingPayments();
+    }
+
+    @Post('approve/:businessId/:paymentLogId')
+    @Roles('ADMIN')
+    async approvePayment(
+        @Param('businessId') businessId: string,
+        @Param('paymentLogId') paymentLogId: string
+    ) {
+        return await this.subscriptionService.approveManualPayment(businessId, paymentLogId);
+    }
+
+    // ESTE ES EL ÚNICO ENDPOINT PARA EL SWITCH
+    @Post('toggle-status/:businessId')
+    @Roles('ADMIN')
+    async toggleStatus(
+        @Param('businessId') businessId: string,
+        @Body('status') status: 'ACTIVE' | 'EXPIRED'
+    ) {
+        return await this.subscriptionService.toggleSubscriptionStatus(businessId, status);
     }
 }

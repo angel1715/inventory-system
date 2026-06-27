@@ -17,15 +17,15 @@ export default function ForgotPasswordPage() {
       await forgotPassword(email);
       setMessage({
         type: "success",
-        text: "Si el correo existe, recibirás instrucciones en breve.",
+        text: "¡Enviado! Revisa tu bandeja de entrada o spam para continuar con el restablecimiento.",
       });
     } catch (error: any) {
+      // Incluso si el usuario pone un correo que no existe, es buena práctica decir
+      // "Si el correo existe, recibirás un mensaje" para no revelar correos registrados.
       setMessage({
-        type: "error",
-        text: "Ocurrió un error. Por favor intenta de nuevo.",
+        type: "success", // Mantenemos "success" para no dar pistas a atacantes
+        text: "Si el correo está registrado, recibirás un mensaje en breve.",
       });
-    } finally {
-      setLoading(false);
     }
   };
 

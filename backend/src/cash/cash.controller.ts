@@ -12,8 +12,9 @@ import { JwtAuthGuard } from "../auth/jwt.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { OpenRegisterDto, CloseRegisterDto } from "./dto/cash.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 @Controller("cash")
 export class CashController {
     constructor(private readonly cashService: CashService) { }

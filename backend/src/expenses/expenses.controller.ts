@@ -17,8 +17,9 @@ import { JwtAuthGuard }
 
 import { CreateExpenseDto }
     from "./dto/create-expense.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 @Controller("expenses")
 export class ExpensesController {
     constructor(

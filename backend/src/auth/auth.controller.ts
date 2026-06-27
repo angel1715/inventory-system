@@ -105,6 +105,7 @@ export class AuthController {
     }
   }
 
+  // En auth.controller.ts - Método me
   @Get("me")
   @UseGuards(AuthGuard("jwt"))
   async me(@Request() req: any) {
@@ -124,6 +125,13 @@ export class AuthController {
     const subscription = user.business?.subscription
       ?? await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
 
+    // Lógica dinámica para el estado
+    const now = new Date();
+    const isActive = subscription && (
+      subscription.accessType === 'LIFETIME' ||
+      (subscription.currentPeriodEnd > now)
+    );
+
     return {
       id: user.id,
       name: user.name,
@@ -131,7 +139,7 @@ export class AuthController {
       role: user.role,
       businessId: user.businessId,
       active: user.active,
-      subscriptionStatus: subscription?.status ?? "INACTIVE",
+      subscriptionStatus: isActive ? "ACTIVE" : "INACTIVE", // Ajustado aquí
       subscription: subscription
     };
   }

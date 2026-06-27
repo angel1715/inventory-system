@@ -17,9 +17,10 @@ import { AddServiceItemDto } from "./dto/add-service-item.dto";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { UpdateLaborCostDto } from "./dto/update-labor-cost.dto";
 import { UpdateServiceOrderDto } from "./dto/update-service-order.dto";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
 @Controller("service-orders")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class ServiceOrdersController {
   constructor(private readonly serviceOrdersService: ServiceOrdersService) { }
 

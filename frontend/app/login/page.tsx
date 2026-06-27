@@ -21,12 +21,25 @@ export default function LoginPage() {
       setLoading(true);
       const data = await loginApi({ email, password });
 
-      if (!data?.token) throw new Error("Respuesta inválida del servidor");
+      if (!data?.token || !data?.user)
+        throw new Error("Respuesta inválida del servidor");
 
+      // 1. Guardar token en tu contexto
       await login(data.token);
 
-      toast.success("¡Bienvenido! Redirigiendo...");
-      window.location.href = "/dashboard";
+      // 2. GUARDAR COOKIES PARA EL MIDDLEWARE (Crucial)
+      // Guardamos el token y el status de suscripción
+      document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Lax;`;
+      document.cookie = `subStatus=${data.user.subscriptionStatus}; path=/; max-age=86400; SameSite=Lax;`;
+
+      toast.success("¡Bienvenido!");
+
+      // 3. Redirección inteligente basada en el estado
+      if (data.user.subscriptionStatus === "ACTIVE") {
+        window.location.href = "/dashboard";
+      } else {
+        window.location.href = "/pricing";
+      }
     } catch (err: any) {
       console.error("LOGIN ERROR:", err);
       toast.error(err?.message || "Error al iniciar sesión");

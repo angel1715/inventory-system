@@ -2,9 +2,10 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/co
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { InventoryService } from "./inventory.service";
 import { GetUser } from "../auth/decorators/get-user.decorator";
+import { SubscriptionGuard } from "../subscription/subscription.guard";
 
 @Controller("inventory")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, SubscriptionGuard)
 export class InventoryController {
   constructor(private inventoryService: InventoryService) { }
 

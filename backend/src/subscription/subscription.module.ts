@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { SubscriptionController } from './subscription.controller';
-import { PrismaModule } from '../prisma/prisma.module'; // Asumiendo que ya tienes un PrismaModule global
-import { StripeWebhookService } from './stripe.webhook.service';
+import { PrismaModule } from '../prisma/prisma.module';
+import { SubscriptionCronService } from './subscription.cron.service';
+import { EmailModule } from '../email/email.module';
 
 @Module({
-    imports: [PrismaModule],
+    imports: [PrismaModule, EmailModule],
     controllers: [SubscriptionController],
-    providers: [SubscriptionService, StripeWebhookService],
-    exports: [SubscriptionService], // Lo exportamos por si en el futuro necesitas validar suscripciones desde otros servicios
+    // SubscriptionService debe estar aquí para que el módulo lo "posea"
+    providers: [SubscriptionService, SubscriptionCronService],
+    // Ahora sí puede exportarlo porque ya lo tiene registrado en providers
+    exports: [SubscriptionService]
 })
 export class SubscriptionModule { }

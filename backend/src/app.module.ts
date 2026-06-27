@@ -33,8 +33,13 @@ import { SubscriptionModule } from './subscription/subscription.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { AdminModule } from "./admin/admin.module";
+import { ScheduleModule } from '@nestjs/schedule';
+import { MailerModule } from '@nestjs-modules/mailer';
 @Module({
   imports: [
+
+
     // =========================
     // ENV CONFIG
     // =========================
@@ -48,6 +53,21 @@ import { ThrottlerGuard } from '@nestjs/throttler';
       ttl: 60000, // 1 minuto
       limit: 100,  // máximo 10 peticiones por minuto por IP
     }]),
+
+    MailerModule.forRoot({
+      transport: {
+        host: 'smtp.resend.com', // O 'smtp.gmail.com'
+        port: 465,
+        secure: true,
+        auth: {
+          user: 'resend', // Usuario (en resend es literalmente 'resend')
+          pass: process.env.EMAIL_PASSWORD, // Tu API Key de Resend o Password
+        },
+      },
+      defaults: {
+        from: '"Tu Sistema" <ventas@tuempresa.com>',
+      },
+    }),
 
     // =========================
     // APP MODULES
@@ -90,6 +110,10 @@ import { ThrottlerGuard } from '@nestjs/throttler';
     NcfModule,
 
     SubscriptionModule,
+
+    AdminModule,
+
+    ScheduleModule.forRoot(),
   ],
 
   controllers: [],
