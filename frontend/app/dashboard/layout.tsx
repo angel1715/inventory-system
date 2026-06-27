@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import Topbar from "@/components/Topbar";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -9,13 +10,16 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <ProtectedRoute>
       <SubscriptionGuard>
         <div className="flex h-screen bg-zinc-50 text-zinc-900 overflow-hidden">
-          <Sidebar />
+          <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
+
           <div className="flex-1 flex flex-col overflow-hidden">
-            <Topbar />
+            <Topbar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
             <main className="flex-1 overflow-auto p-6 lg:p-8 bg-zinc-50">
               {children}
             </main>

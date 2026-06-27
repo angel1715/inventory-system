@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Menu } from "lucide-react"; // ← Agregado
 import { useAuth } from "@/app/context/AuthContext";
 import { getSettings, getCashSession } from "@/lib/api";
 import { LogOut, Circle } from "lucide-react";
 
-export default function Topbar() {
+interface TopbarProps {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+}
+
+export default function Topbar({ sidebarOpen, setSidebarOpen }: TopbarProps) {
   const { user, logout } = useAuth();
 
   const roleLabels = {
@@ -41,6 +47,14 @@ export default function Topbar() {
 
   return (
     <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6 shadow-sm z-50">
+      {/* Botón Hamburguesa (Móvil) */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="lg:hidden text-zinc-700 hover:text-black p-2 -ml-2 rounded-xl hover:bg-zinc-100"
+      >
+        <Menu size={28} />
+      </button>
+
       {/* Left Side */}
       <div className="flex items-center gap-4">
         <div className="w-10 h-10 rounded-2xl overflow-hidden bg-zinc-100 flex items-center justify-center font-bold text-xl border border-zinc-200">
