@@ -49,13 +49,10 @@ export class SubscriptionController {
         return await this.subscriptionService.getPendingPayments();
     }
 
-    @Post('approve/:businessId/:paymentLogId')
     @Roles('ADMIN')
-    async approvePayment(
-        @Param('businessId') businessId: string,
-        @Param('paymentLogId') paymentLogId: string
-    ) {
-        return await this.subscriptionService.approveManualPayment(businessId, paymentLogId);
+    @Post('approve/:businessId/:paymentLogId')
+    async approve(@Param('businessId') businessId: string, @Param('paymentLogId') paymentLogId: string, @Body() body: { planType: 'SUBSCRIPTION' | 'LIFETIME' }) {
+        return await this.subscriptionService.approveManualPayment(businessId, paymentLogId, body.planType);
     }
 
     // ESTE ES EL ÚNICO ENDPOINT PARA EL SWITCH

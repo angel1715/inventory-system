@@ -43,20 +43,36 @@ export class SubscriptionService {
      * Aprueba un pago manual y extiende la suscripción.
      * Actualiza también el estado a ACTIVE.
      */
-    async approveManualPayment(businessId: string, paymentLogId: string) {
+    // En subscription.service.ts
+
+    async approveManualPayment(businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') {
         const log = await this.prisma.manualPaymentLog.findUnique({
             where: { id: paymentLogId }
         });
 
         if (!log) throw new NotFoundException('Comprobante de pago no encontrado');
 
-        const sub = await this.prisma.subscription.findUnique({ where: { businessId } });
-        if (!sub) throw new NotFoundException('Suscripción no encontrada para este negocio');
+        if (planType === 'LIFETIME') {
+            return await this.prisma.$transaction([
+                this.prisma.subscription.update({
+                    where: { businessId },
+                    data: {
+                        accessType: 'LIFETIME', // <--- Cambiamos el tipo a LIFETIME
+                        subscriptionStatus: 'ACTIVE',
+                        currentPeriodEnd: new Date(2099, 11, 31) // Fecha muy lejana
+                    },
+                }),
+                this.prisma.manualPaymentLog.update({
+                    where: { id: paymentLogId },
+                    data: { status: 'APPROVED' },
+                }),
+            ]);
+        }
 
-        // Lógica de fecha: Si ya venció, empezamos desde hoy, sino, sumamos al vencimiento actual
+        // Lógica original para suscripción mensual
+        const sub = await this.prisma.subscription.findUnique({ where: { businessId } });
         const now = new Date();
         const baseDate = (sub.currentPeriodEnd > now) ? sub.currentPeriodEnd : now;
-
         const newExpiry = new Date(baseDate);
         newExpiry.setDate(newExpiry.getDate() + 30);
 
@@ -66,7 +82,7 @@ export class SubscriptionService {
                 data: {
                     accessType: 'SUBSCRIPTION',
                     currentPeriodEnd: newExpiry,
-                    subscriptionStatus: 'ACTIVE', // <--- AGREGADO: Asegura que el cliente recupere acceso
+                    subscriptionStatus: 'ACTIVE',
                 },
             }),
             this.prisma.manualPaymentLog.update({

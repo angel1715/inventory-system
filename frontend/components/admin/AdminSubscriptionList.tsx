@@ -9,7 +9,7 @@ interface ManualPaymentLog {
   amount: number;
   referenceNumber: string;
   businessId: string;
-  receiptUrl: string; // Asegúrate de incluir esto
+  receiptUrl: string;
   business: {
     name: string;
   };
@@ -18,6 +18,9 @@ interface ManualPaymentLog {
 export default function AdminSubscriptionList() {
   const [pendings, setPendings] = useState<ManualPaymentLog[]>([]);
   const [selectedReceipt, setSelectedReceipt] = useState<string | null>(null);
+  const [selectedPlans, setSelectedPlans] = useState<
+    Record<string, "SUBSCRIPTION" | "LIFETIME">
+  >({});
 
   useEffect(() => {
     fetchPendings();
@@ -46,40 +49,48 @@ export default function AdminSubscriptionList() {
     <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
       <h2 className="text-xl font-bold mb-4">Pagos Pendientes de Aprobación</h2>
 
-      {pendings.length === 0 ? (
-        <p className="text-sm text-zinc-500 italic">No hay pagos pendientes.</p>
-      ) : (
-        <div className="space-y-2">
-          {pendings.map((p) => (
-            <div
-              key={p.id}
-              className="flex justify-between items-center p-4 bg-white shadow-sm border border-gray-100 rounded-lg"
-            >
-              <div>
-                <p className="font-bold text-gray-900">{p.business.name}</p>
-                <p className="text-sm text-gray-500">
-                  Monto: RD${p.amount} | Ref: {p.referenceNumber}
-                </p>
-              </div>
+      {pendings.map((p) => (
+        <div
+          key={p.id}
+          className="flex justify-between items-center p-4 bg-white shadow-sm border border-gray-100 rounded-lg"
+        >
+          <div>
+            <p className="font-bold text-gray-900">{p.business.name}</p>
+            <p className="text-sm text-gray-500">
+              RD${p.amount} | Ref: {p.referenceNumber}
+            </p>
+          </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedReceipt(p.receiptUrl)}
-                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition"
-                >
-                  Ver Comprobante
-                </button>
-                <button
-                  onClick={() => handleApprove(p.businessId, p.id)}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
-                >
-                  Aprobar
-                </button>
-              </div>
-            </div>
-          ))}
+          <div className="flex gap-2 items-center">
+            {/* SELECTOR DE PLAN */}
+            <select
+              className="bg-gray-100 border border-gray-200 text-sm rounded-lg p-2"
+              onChange={(e) =>
+                setSelectedPlans({
+                  ...selectedPlans,
+                  [p.id]: e.target.value as "SUBSCRIPTION" | "LIFETIME",
+                })
+              }
+            >
+              <option value="SUBSCRIPTION">Mensual</option>
+              <option value="LIFETIME">Lifetime</option>
+            </select>
+
+            <button
+              onClick={() => setSelectedReceipt(p.receiptUrl)}
+              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+            >
+              Ver
+            </button>
+            <button
+              onClick={() => handleApprove(p.businessId, p.id)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            >
+              Aprobar
+            </button>
+          </div>
         </div>
-      )}
+      ))}
 
       {selectedReceipt && (
         <SubscriptionReceiptModal

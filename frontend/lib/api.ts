@@ -546,8 +546,12 @@ export const uploadReceipt = (data: FormData) =>
 // En lib/api.ts
 export const getPendingPayments = () => request("/subscription/pending-payments");
 
-export const approveManualPayment = (businessId: string, paymentLogId: string) =>
-  request(`/subscription/approve/${businessId}/${paymentLogId}`, { method: "POST" });
+// En lib/api.ts
+export const approveManualPayment = (businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') =>
+  request(`/subscription/approve/${businessId}/${paymentLogId}`, { 
+      method: "POST",
+      body: JSON.stringify({ planType }) // Enviamos el planType
+  });
 
 export const toggleSubscriptionStatus = (businessId: string, status: SubscriptionStatus) =>
   request(`/subscription/toggle-status/${businessId}`, {
