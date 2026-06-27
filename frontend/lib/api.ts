@@ -548,9 +548,9 @@ export const getPendingPayments = () => request("/subscription/pending-payments"
 
 // En lib/api.ts
 export const approveManualPayment = (businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') =>
-  request(`/subscription/approve/${businessId}/${paymentLogId}`, { 
-      method: "POST",
-      body: JSON.stringify({ planType }) // Enviamos el planType
+  request(`/subscription/approve/${businessId}/${paymentLogId}`, {
+    method: "POST",
+    body: JSON.stringify({ planType }) // Enviamos el planType
   });
 
 export const toggleSubscriptionStatus = (businessId: string, status: SubscriptionStatus) =>
@@ -563,3 +563,9 @@ export const toggleSubscriptionStatus = (businessId: string, status: Subscriptio
 * Obtiene el listado de todas las suscripciones con la información del negocio relacionado.
 */
 export const getAllSubscriptions = () => request("/subscription/all-subscriptions");
+
+export const updateSubscriptionPlan = (businessId: string, data: { accessType: 'SUBSCRIPTION' | 'LIFETIME', subscriptionStatus: 'ACTIVE' | 'EXPIRED' }) =>
+  request(`/subscription/update-plan/${businessId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });

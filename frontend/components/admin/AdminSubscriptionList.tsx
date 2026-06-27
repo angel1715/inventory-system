@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { getPendingPayments, approveManualPayment } from "@/lib/api";
 import { toast } from "sonner";
-import { SubscriptionReceiptModal } from "../SubscriptionReceiptModal"; // Asegúrate de la ruta
+import { SubscriptionReceiptModal } from "../SubscriptionReceiptModal";
 
 interface ManualPaymentLog {
   id: string;
@@ -36,61 +36,63 @@ export default function AdminSubscriptionList() {
   };
 
   const handleApprove = async (businessId: string, logId: string) => {
+    const planType = selectedPlans[logId] || "SUBSCRIPTION";
     try {
-      await approveManualPayment(businessId, logId);
+      await approveManualPayment(businessId, logId, planType);
       setPendings((prev) => prev.filter((p) => p.id !== logId));
-      toast.success("Suscripción extendida exitosamente");
+      toast.success(
+        `Suscripción ${planType === "LIFETIME" ? "Lifetime" : "Mensual"} aprobada`,
+      );
     } catch (error) {
       toast.error("Error al aprobar el pago");
     }
   };
 
   return (
-    <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
-      <h2 className="text-xl font-bold mb-4">Pagos Pendientes de Aprobación</h2>
+    <div className="p-6 bg-white rounded-xl border border-gray-200">
+      <div className="space-y-4">
+        {pendings.map((p) => (
+          <div
+            key={p.id}
+            className="flex justify-between items-center p-4 bg-gray-50 border border-gray-100 rounded-lg"
+          >
+            <div>
+              <p className="font-bold text-gray-900">{p.business.name}</p>
+              <p className="text-sm text-gray-500">
+                RD${p.amount} | Ref: {p.referenceNumber}
+              </p>
+            </div>
 
-      {pendings.map((p) => (
-        <div
-          key={p.id}
-          className="flex justify-between items-center p-4 bg-white shadow-sm border border-gray-100 rounded-lg"
-        >
-          <div>
-            <p className="font-bold text-gray-900">{p.business.name}</p>
-            <p className="text-sm text-gray-500">
-              RD${p.amount} | Ref: {p.referenceNumber}
-            </p>
+            <div className="flex gap-2 items-center">
+              <select
+                className="bg-white border border-gray-300 text-sm rounded-lg p-2"
+                onChange={(e) =>
+                  setSelectedPlans({
+                    ...selectedPlans,
+                    [p.id]: e.target.value as "SUBSCRIPTION" | "LIFETIME",
+                  })
+                }
+              >
+                <option value="SUBSCRIPTION">Mensual</option>
+                <option value="LIFETIME">Lifetime</option>
+              </select>
+
+              <button
+                onClick={() => setSelectedReceipt(p.receiptUrl)}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
+              >
+                Ver
+              </button>
+              <button
+                onClick={() => handleApprove(p.businessId, p.id)}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              >
+                Aprobar
+              </button>
+            </div>
           </div>
-
-          <div className="flex gap-2 items-center">
-            {/* SELECTOR DE PLAN */}
-            <select
-              className="bg-gray-100 border border-gray-200 text-sm rounded-lg p-2"
-              onChange={(e) =>
-                setSelectedPlans({
-                  ...selectedPlans,
-                  [p.id]: e.target.value as "SUBSCRIPTION" | "LIFETIME",
-                })
-              }
-            >
-              <option value="SUBSCRIPTION">Mensual</option>
-              <option value="LIFETIME">Lifetime</option>
-            </select>
-
-            <button
-              onClick={() => setSelectedReceipt(p.receiptUrl)}
-              className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
-            >
-              Ver
-            </button>
-            <button
-              onClick={() => handleApprove(p.businessId, p.id)}
-              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-            >
-              Aprobar
-            </button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {selectedReceipt && (
         <SubscriptionReceiptModal

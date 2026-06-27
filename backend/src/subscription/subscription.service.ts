@@ -71,6 +71,7 @@ export class SubscriptionService {
 
         // Lógica original para suscripción mensual
         const sub = await this.prisma.subscription.findUnique({ where: { businessId } });
+        if (!sub) throw new NotFoundException('Suscripción no encontrada para este negocio');
         const now = new Date();
         const baseDate = (sub.currentPeriodEnd > now) ? sub.currentPeriodEnd : now;
         const newExpiry = new Date(baseDate);

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getAllSubscriptions, toggleSubscriptionStatus } from "@/lib/api";
+import { getAllSubscriptions, updateSubscriptionPlan } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function SubscriptionManager() {
@@ -11,68 +11,63 @@ export default function SubscriptionManager() {
   }, []);
 
   const loadSubs = async () => {
-    try {
-      const data = await getAllSubscriptions();
-      setSubs(data);
-    } catch (error) {
-      toast.error("Error al cargar suscripciones");
-    }
+    const data = await getAllSubscriptions();
+    setSubs(data);
   };
 
-  const handleToggle = async (businessId: string, currentStatus: string) => {
-    const newStatus = currentStatus === "ACTIVE" ? "EXPIRED" : "ACTIVE";
+  const handleUpdate = async (
+    businessId: string,
+    accessType: any,
+    status: any,
+  ) => {
     try {
-      await toggleSubscriptionStatus(businessId, newStatus);
-      toast.success(`Suscripción actualizada a ${newStatus}`);
-      loadSubs(); // Recargamos para ver los cambios reflejados
-    } catch (error) {
-      toast.error("Error al cambiar estado");
+      await updateSubscriptionPlan(businessId, {
+        accessType,
+        subscriptionStatus: status,
+      });
+      toast.success("Plan actualizado");
+      loadSubs();
+    } catch (e) {
+      toast.error("Error al actualizar");
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm">
-      <h3 className="text-lg font-semibold mb-4">Gestión de Suscripciones</h3>
-      <div className="space-y-3">
-        {subs.map((s) => (
-          <div
-            key={s.id}
-            className="flex justify-between items-center p-3 border border-zinc-100 rounded-xl hover:bg-zinc-50"
-          >
-            <div>
-              {/* Accedemos al nombre a través de la relación business */}
-              <p className="font-medium text-sm">
-                {s.business?.name || "Sin nombre"}
-              </p>
-              <p className="text-[10px] text-zinc-400">
-                {/* Usamos currentPeriodEnd que es el campo correcto en el modelo Subscription */}
-                Expira:{" "}
-                {s.currentPeriodEnd
-                  ? new Date(s.currentPeriodEnd).toLocaleDateString()
-                  : "N/A"}
-              </p>
-            </div>
-
-            {/* El botón usa businessId porque toggleSubscriptionStatus necesita el ID del negocio */}
-            <button
-              onClick={() => handleToggle(s.businessId, s.subscriptionStatus)}
-              className={`w-12 h-6 rounded-full transition-colors flex items-center p-1 ${
-                s.subscriptionStatus === "ACTIVE"
-                  ? "bg-green-500"
-                  : "bg-zinc-300"
-              }`}
+    <div className="bg-white p-6 rounded-xl border border-gray-200">
+      <h3 className="font-bold mb-4">
+        Gestión de Suscripciones (Todos los Clientes)
+      </h3>
+      {subs.map((s) => (
+        <div
+          key={s.businessId}
+          className="flex items-center justify-between p-3 border-b border-gray-100"
+        >
+          <span className="font-medium">{s.business.name}</span>
+          <div className="flex gap-2">
+            <select
+              defaultValue={s.accessType}
+              onChange={(e) =>
+                handleUpdate(s.businessId, e.target.value, s.subscriptionStatus)
+              }
+              className="text-xs p-1 border rounded"
             >
-              <div
-                className={`w-4 h-4 rounded-full bg-white transition-transform ${
-                  s.subscriptionStatus === "ACTIVE"
-                    ? "translate-x-6"
-                    : "translate-x-0"
-                }`}
-              />
-            </button>
+              <option value="SUBSCRIPTION">Mensual</option>
+              <option value="LIFETIME">Lifetime</option>
+            </select>
+
+            <select
+              defaultValue={s.subscriptionStatus}
+              onChange={(e) =>
+                handleUpdate(s.businessId, s.accessType, e.target.value)
+              }
+              className="text-xs p-1 border rounded"
+            >
+              <option value="ACTIVE">Activo</option>
+              <option value="EXPIRED">Vencido</option>
+            </select>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }

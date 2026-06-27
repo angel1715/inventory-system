@@ -348,7 +348,7 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-12">
               <SubscriptionManager />{" "}
-              {/* Panel de control de todos los clientes */}
+              
             </div>
           </div>
         )}

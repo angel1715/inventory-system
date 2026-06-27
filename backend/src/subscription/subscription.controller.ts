@@ -1,14 +1,15 @@
-import { Controller, Post, Body, UseGuards, Request, Param, Get, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Param, Get, BadRequestException, Patch } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { UploadReceiptDto } from './dto/upload-receipt.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { Roles } from '../auth/roles.decorator';
 import { UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('subscription')
 export class SubscriptionController {
-    constructor(private readonly subscriptionService: SubscriptionService) { }
+    constructor(private readonly subscriptionService: SubscriptionService, private readonly prisma: PrismaService) { }
 
     @UseGuards(JwtAuthGuard)
     @Post('upload-receipt')
@@ -63,5 +64,22 @@ export class SubscriptionController {
         @Body('status') status: 'ACTIVE' | 'EXPIRED'
     ) {
         return await this.subscriptionService.toggleSubscriptionStatus(businessId, status);
+    }
+
+    @Patch('update-plan/:businessId')
+    @Roles('ADMIN')
+    async updatePlan(
+        @Param('businessId') businessId: string,
+        @Body() body: { accessType: 'SUBSCRIPTION' | 'LIFETIME', subscriptionStatus: 'ACTIVE' | 'EXPIRED' }
+    ) {
+        // Ahora 'this.prisma' ya existe y no te dará error
+        return await this.prisma.subscription.update({
+            where: { businessId },
+            data: {
+                accessType: body.accessType,
+                subscriptionStatus: body.subscriptionStatus === 'ACTIVE' ? 'ACTIVE' : 'CANCELED',
+                currentPeriodEnd: body.accessType === 'LIFETIME' ? new Date(2099, 11, 31) : new Date()
+            }
+        });
     }
 }
