@@ -34,7 +34,7 @@ export default function PricingPage() {
           Elige el plan para tu negocio
         </h1>
         <p className="text-lg text-gray-600">
-          Escala tu sistema AG-POS con funcionalidades ilimitadas.
+          Escala tu sistema OGAdmin con funcionalidades ilimitadas.
         </p>
       </div>
 
