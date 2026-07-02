@@ -1,8 +1,7 @@
 import Cookies from "js-cookie";
 
 const API = process.env.NEXT_PUBLIC_API_URL;
-export type SubscriptionStatus = 'ACTIVE' | 'EXPIRED';
-
+export type SubscriptionStatus = 'ACTIVE' | 'CANCELED' | 'PAST_DUE' | 'TRIALING' | 'INCOMPLETE';
 // =========================
 // TOKEN (Sincronizado con Cookies)
 // =========================
@@ -564,8 +563,21 @@ export const toggleSubscriptionStatus = (businessId: string, status: Subscriptio
 */
 export const getAllSubscriptions = () => request("/subscription/all-subscriptions");
 
-export const updateSubscriptionPlan = (businessId: string, data: { accessType: 'SUBSCRIPTION' | 'LIFETIME', subscriptionStatus: 'ACTIVE' | 'EXPIRED' }) =>
-  request(`/subscription/update-plan/${businessId}`, {
+export const updateSubscriptionPlan = async (
+  businessId: string,
+  data: {
+    accessType: 'SUBSCRIPTION' | 'LIFETIME',
+    subscriptionStatus: 'ACTIVE' | 'CANCELED'
+  }
+) => {
+  const result = await request(`/subscription/update-plan/${businessId}`, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
+
+  // SI LA PETICIÓN FUE EXITOSA: Actualizamos la cookie localmente
+  // Esto hará que el middleware lea el nuevo estado en la siguiente navegación
+  Cookies.set("subStatus", data.subscriptionStatus, { expires: 7 });
+
+  return result;
+};

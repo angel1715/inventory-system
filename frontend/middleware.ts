@@ -9,7 +9,6 @@ export function middleware(req: NextRequest) {
 
     // 1. Permitir acceso libre a páginas públicas
     if (pathname === "/login" || pathname === "/pricing" || pathname === "/register") {
-        // Si el usuario ya está logueado y va a login, redirigir al dashboard
         if (token && pathname === "/login") {
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
@@ -22,7 +21,7 @@ export function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    // 3. Si tiene token pero la suscripción no es ACTIVE, forzar a /pricing
+    // 3. Validación de Suscripción (subStatus debe ser estrictamente ACTIVE)
     if (token && subStatus !== "ACTIVE" && pathname !== "/pricing") {
         return NextResponse.redirect(new URL("/pricing", req.url));
     }
@@ -31,7 +30,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        "/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$).*)",
-    ],
+    matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$).*)"],
 };
