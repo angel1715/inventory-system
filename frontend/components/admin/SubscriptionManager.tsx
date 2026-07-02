@@ -32,7 +32,10 @@ export default function SubscriptionManager() {
         accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
         // Casteamos a 'any' solo si el import del enum sigue dando conflicto de tipos,
         // pero idealmente usa el tipo importado:
-        subscriptionStatus: status as SubscriptionStatus,
+        subscriptionStatus:
+          status === "ACTIVE" || status === "CANCELED"
+            ? status
+            : ("CANCELED" as "ACTIVE" | "CANCELED"),
       });
       toast.success("Plan actualizado");
       await loadSubs();
