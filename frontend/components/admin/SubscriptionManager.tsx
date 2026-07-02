@@ -74,6 +74,8 @@ export default function SubscriptionManager() {
                 <input
                   type="radio"
                   className="cursor-pointer"
+                  // Asignamos el nombre único por negocio para que el navegador los agrupe bien
+                  name={`status-${s.businessId}`}
                   checked={s.subscriptionStatus === "ACTIVE"}
                   onChange={() =>
                     handleUpdate(s.businessId, s.accessType, "ACTIVE")
@@ -85,6 +87,8 @@ export default function SubscriptionManager() {
                 <input
                   type="radio"
                   className="cursor-pointer"
+                  // Mismo nombre que el anterior para que formen parte del mismo grupo
+                  name={`status-${s.businessId}`}
                   checked={s.subscriptionStatus === "EXPIRED"}
                   onChange={() =>
                     handleUpdate(s.businessId, s.accessType, "EXPIRED")
