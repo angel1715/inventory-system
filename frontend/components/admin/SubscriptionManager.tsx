@@ -1,6 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getAllSubscriptions, updateSubscriptionPlan } from "@/lib/api";
+import {
+  getAllSubscriptions,
+  SubscriptionStatus,
+  updateSubscriptionPlan,
+} from "@/lib/api";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react"; // Importamos el icono
 
@@ -22,27 +26,19 @@ export default function SubscriptionManager() {
     accessType: string,
     status: string,
   ) => {
-    // 1. Actualización Optimista: Cambiamos el estado local ANTES del API call
-    setSubs((prev) =>
-      prev.map((s) =>
-        s.businessId === businessId
-          ? { ...s, subscriptionStatus: status, accessType }
-          : s,
-      ),
-    );
-
     setLoadingId(businessId);
     try {
       await updateSubscriptionPlan(businessId, {
         accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
-        subscriptionStatus: status as "ACTIVE" | "EXPIRED",
+        // Casteamos a 'any' solo si el import del enum sigue dando conflicto de tipos,
+        // pero idealmente usa el tipo importado:
+        subscriptionStatus: status as SubscriptionStatus,
       });
       toast.success("Plan actualizado");
-      // Recargamos para asegurar sincronía real con DB
       await loadSubs();
     } catch (e) {
       toast.error("Error al actualizar");
-      await loadSubs(); // Revertimos al estado real en caso de error
+      await loadSubs();
     } finally {
       setLoadingId(null);
     }
@@ -103,9 +99,8 @@ export default function SubscriptionManager() {
                   type="radio"
                   className="cursor-pointer"
                   name={`status-${s.businessId}`}
-                  // Ahora comparamos contra "CANCELED"
+                  // La clave está en comparar contra "CANCELED"
                   checked={s.subscriptionStatus === "CANCELED"}
-                  // Enviamos "CANCELED" al backend
                   onChange={() =>
                     handleUpdate(s.businessId, s.accessType, "CANCELED")
                   }
