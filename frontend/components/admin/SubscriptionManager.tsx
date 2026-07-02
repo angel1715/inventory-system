@@ -19,21 +19,30 @@ export default function SubscriptionManager() {
 
   const handleUpdate = async (
     businessId: string,
-    accessType: string, // Sigue siendo string por venir del evento
+    accessType: string,
     status: string,
   ) => {
+    // 1. Actualización Optimista: Cambiamos el estado local ANTES del API call
+    setSubs((prev) =>
+      prev.map((s) =>
+        s.businessId === businessId
+          ? { ...s, subscriptionStatus: status, accessType }
+          : s,
+      ),
+    );
+
     setLoadingId(businessId);
     try {
       await updateSubscriptionPlan(businessId, {
-        // Usamos "as" para asegurar a TS que son los tipos correctos
         accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
         subscriptionStatus: status as "ACTIVE" | "EXPIRED",
       });
       toast.success("Plan actualizado");
+      // Recargamos para asegurar sincronía real con DB
       await loadSubs();
     } catch (e) {
       toast.error("Error al actualizar");
-      await loadSubs();
+      await loadSubs(); // Revertimos al estado real en caso de error
     } finally {
       setLoadingId(null);
     }
@@ -42,6 +51,13 @@ export default function SubscriptionManager() {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200">
       <h3 className="font-bold mb-4">Gestión de Suscripciones</h3>
+      <pre className="text-[10px] bg-gray-100 p-2 overflow-auto">
+        {JSON.stringify(
+          subs.map((s) => ({ id: s.businessId, status: s.subscriptionStatus })),
+          null,
+          2,
+        )}
+      </pre>
       {subs.map((s) => (
         <div
           key={s.businessId}
@@ -74,7 +90,6 @@ export default function SubscriptionManager() {
                 <input
                   type="radio"
                   className="cursor-pointer"
-                  // Asignamos el nombre único por negocio para que el navegador los agrupe bien
                   name={`status-${s.businessId}`}
                   checked={s.subscriptionStatus === "ACTIVE"}
                   onChange={() =>
@@ -87,11 +102,12 @@ export default function SubscriptionManager() {
                 <input
                   type="radio"
                   className="cursor-pointer"
-                  // Mismo nombre que el anterior para que formen parte del mismo grupo
                   name={`status-${s.businessId}`}
-                  checked={s.subscriptionStatus === "EXPIRED"}
+                  // Ahora comparamos contra "CANCELED"
+                  checked={s.subscriptionStatus === "CANCELED"}
+                  // Enviamos "CANCELED" al backend
                   onChange={() =>
-                    handleUpdate(s.businessId, s.accessType, "EXPIRED")
+                    handleUpdate(s.businessId, s.accessType, "CANCELED")
                   }
                 />
                 Vencido
