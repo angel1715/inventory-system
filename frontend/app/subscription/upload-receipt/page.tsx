@@ -26,11 +26,11 @@ export default function UploadReceiptPage() {
       const payload = {
         amount: Number(form.amount.value),
         referenceNumber: form.referenceNumber.value,
-        receiptUrl: imageUrl, // Aquí enviamos la URL completa
+        receiptUrl: imageUrl,
       };
 
       // 3. Enviar al backend
-      await uploadReceipt(payload as any);
+      await uploadReceipt(payload);
 
       toast.success("Comprobante enviado exitosamente.");
       router.push("/subscription/waiting-approval");

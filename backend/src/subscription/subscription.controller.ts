@@ -11,12 +11,13 @@ import { PrismaService } from '../prisma/prisma.service';
 export class SubscriptionController {
     constructor(private readonly subscriptionService: SubscriptionService, private readonly prisma: PrismaService) { }
 
+    // AdminController.ts (o SubscriptionController, donde esté tu POST)
     @UseGuards(JwtAuthGuard)
     @Post('upload-receipt')
-    // @UseInterceptors(FileInterceptor('file')) // <--- COMENTA O QUITA ESTA LÍNEA
+    // Elimina esto: @UseInterceptors(FileInterceptor('file')) 
     async uploadReceipt(
         @Request() req,
-        @Body() dto: UploadReceiptDto // Ahora NestJS validará el JSON automáticamente
+        @Body() dto: UploadReceiptDto // Ahora recibirá el JSON directamente
     ) {
         const businessId = req.user.businessId;
         return await this.subscriptionService.createManualPaymentLog(businessId, dto);

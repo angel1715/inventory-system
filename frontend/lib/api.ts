@@ -534,12 +534,14 @@ export const validateInvitationToken = (token: string) =>
  * El parámetro 'data' debe ser un objeto FormData con los campos:
  * 'amount', 'referenceNumber' y 'file'.
  */
-export const uploadReceipt = (data: FormData) =>
+// lib/api.ts
+export const uploadReceipt = (data: any) =>
   request("/subscription/upload-receipt", {
     method: "POST",
-    body: data,
-    // NO agregues 'Content-Type': 'multipart/form-data' aquí, 
-    // el navegador lo hace solo con el boundary correcto.
+    headers: {
+      "Content-Type": "application/json", // Indispensable para que NestJS procese el DTO
+    },
+    body: JSON.stringify(data), // Convertimos el objeto a string
   });
 
 // En lib/api.ts
