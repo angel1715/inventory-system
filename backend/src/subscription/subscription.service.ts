@@ -219,26 +219,31 @@ export class SubscriptionService {
      * Cambia el estado de la suscripción (usado por el Switch del Admin)
      */
     async toggleSubscriptionStatus(businessId: string, status: 'ACTIVE' | 'CANCELED') {
-        const newEndDate = status === 'ACTIVE'
-            ? new Date(new Date().setMonth(new Date().getMonth() + 1))
-            : new Date();
-
-        // Incluimos el negocio para poder enviar el email
+        // 1. Actualizamos y pedimos explícitamente el negocio relacionado
         const sub = await this.prisma.subscription.update({
             where: { businessId },
             data: {
                 subscriptionStatus: status,
-                currentPeriodEnd: newEndDate
+                currentPeriodEnd: status === 'ACTIVE'
+                    ? new Date(new Date().setMonth(new Date().getMonth() + 1))
+                    : new Date(),
             },
-            include: { business: true }
+            include: { business: true } // ¡CRÍTICO! Esto debe estar aquí
         });
 
-        // Notificar al cliente (APPROVED si se activa, REJECTED si se cancela)
-        await this.emailService.sendPaymentStatusUpdate(
-            sub.business.email || 'correo-no-disponible@ejemplo.com',
-            sub.business.name,
-            status === 'ACTIVE' ? 'APPROVED' : 'REJECTED'
-        );
+        // 2. Depuración: Si esto no aparece en tu consola, el servicio no se está ejecutando
+        this.logger.log(`Intentando enviar correo a: ${sub.business?.email} para negocio: ${sub.business?.name}`);
+
+        if (sub.business?.email) {
+            await this.emailService.sendPaymentStatusUpdate(
+                sub.business.email,
+                sub.business.name,
+                status === 'ACTIVE' ? 'APPROVED' : 'REJECTED'
+            );
+            this.logger.log("Correo enviado exitosamente.");
+        } else {
+            this.logger.error(`FALLO: El negocio ${businessId} no tiene email registrado.`);
+        }
 
         return sub;
     }
