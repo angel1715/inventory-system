@@ -17,25 +17,36 @@ export default function PricingPage() {
     const file = formData.get("file") as File;
 
     try {
-      // 1. PRIMERO subimos la imagen a Cloudinary (necesitas importar tu función aquí)
+      // 1. Subida a Cloudinary
       const { uploadImage } = await import("@/lib/uploadImage");
       const imageUrl = await uploadImage(file);
 
-      // 2. LUEGO construimos el objeto JSON que tu API espera
+      // 2. Payload
       const payload = {
         amount: Number(formData.get("amount")),
         referenceNumber: formData.get("referenceNumber") as string,
         receiptUrl: imageUrl,
       };
 
-      // 3. ENVIAMOS el JSON a tu API
+      // 3. Envío a API
       await uploadReceipt(payload);
 
-      toast.success("Comprobante enviado exitosamente.");
+      // --- AJUSTE 1: Feedback más claro ---
+      toast.success(
+        "¡Comprobante enviado! Estamos validando tu pago, te notificaremos por correo.",
+      );
       setIsUploading(false);
     } catch (error: any) {
-      console.error("Error completo:", error);
-      toast.error(error.message || "Error al enviar el comprobante");
+      console.error("Error:", error);
+
+      // --- AJUSTE 2: Validación específica para el error de duplicado ---
+      // Si el backend devuelve un 400, Axios/Fetch lo lanza aquí.
+      // Si usas un cliente como axios, el mensaje viene en error.response.data.message
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Error al enviar el comprobante";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

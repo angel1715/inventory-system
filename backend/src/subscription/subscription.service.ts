@@ -29,7 +29,8 @@ export class SubscriptionService {
     // Agrega esto a tu SubscriptionService
     async createManualPaymentLog(businessId: string, dto: UploadReceiptDto) {
         try {
-            return await this.prisma.manualPaymentLog.create({
+            // 1. Guardamos en BD e incluimos el negocio para obtener su nombre
+            const log = await this.prisma.manualPaymentLog.create({
                 data: {
                     businessId,
                     amount: dto.amount,
@@ -37,16 +38,17 @@ export class SubscriptionService {
                     receiptUrl: dto.receiptUrl,
                     status: 'PENDING',
                 },
+                include: { business: true }
             });
-        } catch (error: any) {
-            // Verificamos si es el error P2002 de Prisma (Unique constraint violation)
-            if (error?.code === 'P2002') {
-                this.logger.warn(`Intento de duplicado de referencia: ${dto.referenceNumber} para el negocio ${businessId}`);
-                throw new BadRequestException('Este número de referencia ya ha sido utilizado anteriormente.');
-            }
 
-            // Si es otro error, lo logueamos y lanzamos
-            this.logger.error(`Error al crear log de pago: ${error.message}`);
+            // 2. Notificación al Admin (tú)
+            await this.emailService.sendAdminNotification(log.business.name, log.amount.toNumber());
+            return log;
+        } catch (error: any) {
+            if (error?.code === 'P2002') {
+                this.logger.warn(`Intento de duplicado de referencia: ${dto.referenceNumber}`);
+                throw new BadRequestException('Este número de referencia ya ha sido utilizado.');
+            }
             throw error;
         }
     }
@@ -58,44 +60,24 @@ export class SubscriptionService {
     // En subscription.service.ts
 
     async approveManualPayment(businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') {
+        // 1. Buscamos el log con la relación al negocio
         const log = await this.prisma.manualPaymentLog.findUnique({
-            where: { id: paymentLogId }
+            where: { id: paymentLogId },
+            include: { business: true }
         });
 
         if (!log) throw new NotFoundException('Comprobante de pago no encontrado');
 
-        if (planType === 'LIFETIME') {
-            return await this.prisma.$transaction([
-                this.prisma.subscription.update({
-                    where: { businessId },
-                    data: {
-                        accessType: 'LIFETIME', // <--- Cambiamos el tipo a LIFETIME
-                        subscriptionStatus: 'ACTIVE',
-                        currentPeriodEnd: new Date(2099, 11, 31) // Fecha muy lejana
-                    },
-                }),
-                this.prisma.manualPaymentLog.update({
-                    where: { id: paymentLogId },
-                    data: { status: 'APPROVED' },
-                }),
-            ]);
-        }
-
-        // Lógica original para suscripción mensual
-        const sub = await this.prisma.subscription.findUnique({ where: { businessId } });
-        if (!sub) throw new NotFoundException('Suscripción no encontrada para este negocio');
-        const now = new Date();
-        const baseDate = (sub.currentPeriodEnd > now) ? sub.currentPeriodEnd : now;
-        const newExpiry = new Date(baseDate);
-        newExpiry.setDate(newExpiry.getDate() + 30);
-
-        return await this.prisma.$transaction([
+        // 2. Ejecutamos la lógica de actualización (Transacción)
+        const result = await this.prisma.$transaction([
             this.prisma.subscription.update({
                 where: { businessId },
                 data: {
-                    accessType: 'SUBSCRIPTION',
-                    currentPeriodEnd: newExpiry,
+                    accessType: planType,
                     subscriptionStatus: 'ACTIVE',
+                    currentPeriodEnd: planType === 'LIFETIME'
+                        ? new Date(2099, 11, 31)
+                        : new Date(new Date().setMonth(new Date().getMonth() + 1))
                 },
             }),
             this.prisma.manualPaymentLog.update({
@@ -103,6 +85,15 @@ export class SubscriptionService {
                 data: { status: 'APPROVED' },
             }),
         ]);
+
+        // 3. Notificación al Cliente
+        await this.emailService.sendPaymentStatusUpdate(
+            log.business.email || 'correo-no-disponible@ejemplo.com',
+            log.business.name,
+            'APPROVED'
+        );
+
+        return result;
     }
 
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
@@ -186,15 +177,26 @@ export class SubscriptionService {
       */
     async reactivateSubscription(businessId: string) {
         const newEndDate = new Date();
-        newEndDate.setDate(newEndDate.getDate() + 30); // Sumar 30 días
+        newEndDate.setDate(newEndDate.getDate() + 30);
 
-        return await this.prisma.subscription.update({
+        // Incluimos el negocio para poder enviar el email
+        const sub = await this.prisma.subscription.update({
             where: { businessId },
             data: {
                 subscriptionStatus: 'ACTIVE',
                 currentPeriodEnd: newEndDate
-            }
+            },
+            include: { business: true }
         });
+
+        // Notificar al cliente
+        await this.emailService.sendPaymentStatusUpdate(
+            sub.business.email || 'correo-no-disponible@ejemplo.com',
+            sub.business.name,
+            'APPROVED'
+        );
+
+        return sub;
     }
 
     // Agrégalo a tu SubscriptionService
@@ -221,12 +223,23 @@ export class SubscriptionService {
             ? new Date(new Date().setMonth(new Date().getMonth() + 1))
             : new Date();
 
-        return await this.prisma.subscription.update({
+        // Incluimos el negocio para poder enviar el email
+        const sub = await this.prisma.subscription.update({
             where: { businessId },
             data: {
-                subscriptionStatus: status, // Ya no necesitas mapear, envía el valor real
+                subscriptionStatus: status,
                 currentPeriodEnd: newEndDate
-            }
+            },
+            include: { business: true }
         });
+
+        // Notificar al cliente (APPROVED si se activa, REJECTED si se cancela)
+        await this.emailService.sendPaymentStatusUpdate(
+            sub.business.email || 'correo-no-disponible@ejemplo.com',
+            sub.business.name,
+            status === 'ACTIVE' ? 'APPROVED' : 'REJECTED'
+        );
+
+        return sub;
     }
 }

@@ -1,24 +1,18 @@
-import { Controller, Post, Body, UseGuards, Request, Param, Get, BadRequestException, Patch } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Param, Get, Patch } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { UploadReceiptDto } from './dto/upload-receipt.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { Roles } from '../auth/roles.decorator';
-import { UseInterceptors, UploadedFile } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('subscription')
 export class SubscriptionController {
-    constructor(private readonly subscriptionService: SubscriptionService, private readonly prisma: PrismaService) { }
-
+    constructor(private readonly subscriptionService: SubscriptionService) { }
     // AdminController.ts (o SubscriptionController, donde esté tu POST)
     @UseGuards(JwtAuthGuard)
     @Post('upload-receipt')
     async uploadReceipt(@Request() req, @Body() dto: UploadReceiptDto) {
-        console.log("--- LLEGÓ PETICIÓN AL BACKEND ---");
-        console.log("DTO recibido:", dto); // Si esto no aparece en la terminal de NestJS, el problema es el Frontend.
-
         const businessId = req.user.businessId;
+        // El servicio ya maneja la lógica, el guard y la notificación al admin
         return await this.subscriptionService.createManualPaymentLog(businessId, dto);
     }
 
@@ -42,7 +36,12 @@ export class SubscriptionController {
 
     @Roles('ADMIN')
     @Post('approve/:businessId/:paymentLogId')
-    async approve(@Param('businessId') businessId: string, @Param('paymentLogId') paymentLogId: string, @Body() body: { planType: 'SUBSCRIPTION' | 'LIFETIME' }) {
+    async approve(
+        @Param('businessId') businessId: string,
+        @Param('paymentLogId') paymentLogId: string,
+        @Body() body: { planType: 'SUBSCRIPTION' | 'LIFETIME' }
+    ) {
+        // El servicio ya maneja la transacción y la notificación al cliente
         return await this.subscriptionService.approveManualPayment(businessId, paymentLogId, body.planType);
     }
 

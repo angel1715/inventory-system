@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   getAllSubscriptions,
   SubscriptionStatus,
+  toggleSubscriptionStatus,
   updateSubscriptionPlan,
 } from "@/lib/api";
 import { toast } from "sonner";
@@ -25,26 +26,35 @@ export default function SubscriptionManager() {
     businessId: string,
     accessType: string,
     status: string,
+    isStatusChange: boolean = false, // Nuevo parámetro para saber qué cambió
   ) => {
-    // 1. Actualización Optimista: Cambiamos el estado local ANTES del API call
     setSubs((prev) =>
       prev.map((s) =>
-        s.businessId === businessId ? { ...s, subscriptionStatus: status } : s,
+        s.businessId === businessId
+          ? { ...s, subscriptionStatus: status, accessType }
+          : s,
       ),
     );
 
     setLoadingId(businessId);
     try {
-      await updateSubscriptionPlan(businessId, {
-        accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
-        subscriptionStatus: status as "ACTIVE" | "CANCELED",
-      });
-      toast.success("Plan actualizado");
-      // Recargamos para refrescar cualquier dato calculado del servidor
+      if (isStatusChange) {
+        // LLAMAMOS AL ENDPOINT QUE TIENE LA NOTIFICACIÓN
+        await toggleSubscriptionStatus(
+          businessId,
+          status as "ACTIVE" | "CANCELED",
+        );
+      } else {
+        // LLAMAMOS AL UPDATE PLAN (si solo cambió el tipo de acceso)
+        await updateSubscriptionPlan(businessId, {
+          accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
+          subscriptionStatus: status as "ACTIVE" | "CANCELED",
+        });
+      }
+      toast.success("Plan actualizado y notificado.");
       await loadSubs();
     } catch (e) {
       toast.error("Error al actualizar");
-      // Si falla, volvemos a cargar para asegurar que el UI refleje el estado real de la BD
       await loadSubs();
     } finally {
       setLoadingId(null);
@@ -96,7 +106,7 @@ export default function SubscriptionManager() {
                   name={`status-${s.businessId}`}
                   checked={s.subscriptionStatus === "ACTIVE"}
                   onChange={() =>
-                    handleUpdate(s.businessId, s.accessType, "ACTIVE")
+                    handleUpdate(s.businessId, s.accessType, "ACTIVE", true)
                   }
                 />
                 Activo
@@ -109,7 +119,7 @@ export default function SubscriptionManager() {
                   // La clave está en comparar contra "CANCELED"
                   checked={s.subscriptionStatus === "CANCELED"}
                   onChange={() =>
-                    handleUpdate(s.businessId, s.accessType, "CANCELED")
+                    handleUpdate(s.businessId, s.accessType, "CANCELED", true)
                   }
                 />
                 Vencido
