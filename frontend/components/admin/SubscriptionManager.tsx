@@ -26,21 +26,25 @@ export default function SubscriptionManager() {
     accessType: string,
     status: string,
   ) => {
+    // 1. Actualización Optimista: Cambiamos el estado local ANTES del API call
+    setSubs((prev) =>
+      prev.map((s) =>
+        s.businessId === businessId ? { ...s, subscriptionStatus: status } : s,
+      ),
+    );
+
     setLoadingId(businessId);
     try {
       await updateSubscriptionPlan(businessId, {
         accessType: accessType as "SUBSCRIPTION" | "LIFETIME",
-        // Casteamos a 'any' solo si el import del enum sigue dando conflicto de tipos,
-        // pero idealmente usa el tipo importado:
-        subscriptionStatus:
-          status === "ACTIVE" || status === "CANCELED"
-            ? status
-            : ("CANCELED" as "ACTIVE" | "CANCELED"),
+        subscriptionStatus: status as "ACTIVE" | "CANCELED",
       });
       toast.success("Plan actualizado");
+      // Recargamos para refrescar cualquier dato calculado del servidor
       await loadSubs();
     } catch (e) {
       toast.error("Error al actualizar");
+      // Si falla, volvemos a cargar para asegurar que el UI refleje el estado real de la BD
       await loadSubs();
     } finally {
       setLoadingId(null);

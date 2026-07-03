@@ -545,24 +545,49 @@ export const uploadReceipt = (data: FormData) =>
 // En lib/api.ts
 export const getPendingPayments = () => request("/subscription/pending-payments");
 
-// En lib/api.ts
-export const approveManualPayment = (businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') =>
-  request(`/subscription/approve/${businessId}/${paymentLogId}`, {
+/**
+ * Aprueba un pago manual y actualiza la cookie a ACTIVE
+ */
+export const approveManualPayment = async (
+  businessId: string,
+  paymentLogId: string,
+  planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION'
+) => {
+  const result = await request(`/subscription/approve/${businessId}/${paymentLogId}`, {
     method: "POST",
-    body: JSON.stringify({ planType }) // Enviamos el planType
+    body: JSON.stringify({ planType })
   });
 
-export const toggleSubscriptionStatus = (businessId: string, status: SubscriptionStatus) =>
-  request(`/subscription/toggle-status/${businessId}`, {
+  // Cuando aprobamos un pago, el estatus resultante SIEMPRE es ACTIVE
+  Cookies.set("subStatus", "ACTIVE", { expires: 7, path: '/' });
+
+  return result;
+};
+
+/**
+ * Toggle (Cambio de switch)
+ * Actualiza la base de datos y la cookie al mismo tiempo
+ */
+export const toggleSubscriptionStatus = async (businessId: string, status: SubscriptionStatus) => {
+  const result = await request(`/subscription/toggle-status/${businessId}`, {
     method: "POST",
     body: JSON.stringify({ status }),
   });
+
+  // Sincronizamos la cookie con el nuevo estado del switch
+  Cookies.set("subStatus", status, { expires: 7, path: '/' });
+
+  return result;
+};
 
 /**
 * Obtiene el listado de todas las suscripciones con la información del negocio relacionado.
 */
 export const getAllSubscriptions = () => request("/subscription/all-subscriptions");
 
+/**
+ * Actualización de plan completa
+ */
 export const updateSubscriptionPlan = async (
   businessId: string,
   data: {
@@ -575,9 +600,8 @@ export const updateSubscriptionPlan = async (
     body: JSON.stringify(data),
   });
 
-  // SI LA PETICIÓN FUE EXITOSA: Actualizamos la cookie localmente
-  // Esto hará que el middleware lea el nuevo estado en la siguiente navegación
-  Cookies.set("subStatus", data.subscriptionStatus, { expires: 7 });
+  // Sincronizamos la cookie
+  Cookies.set("subStatus", data.subscriptionStatus, { expires: 7, path: '/' });
 
   return result;
 };

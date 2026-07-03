@@ -125,12 +125,17 @@ export class AuthController {
     const subscription = user.business?.subscription
       ?? await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
 
-    // Lógica dinámica para el estado
+    // Lógica dinámica de suscripción corregida:
+    // 1. Debe tener un registro de suscripción.
+    // 2. O es LIFETIME, o debe estar en fecha y con estado ACTIVE.
     const now = new Date();
-    const isActive = subscription && (
-      subscription.accessType === 'LIFETIME' ||
-      (subscription.currentPeriodEnd > now)
-    );
+
+    const isLifetime = subscription?.accessType === 'LIFETIME';
+    const isWithinDate = subscription ? subscription.currentPeriodEnd > now : false;
+    const isStatusActive = subscription?.subscriptionStatus === 'ACTIVE';
+
+    // El usuario solo está activo si es lifetime O (está en fecha Y tiene status activo)
+    const isActive = subscription && (isLifetime || (isWithinDate && isStatusActive));
 
     return {
       id: user.id,
@@ -139,7 +144,8 @@ export class AuthController {
       role: user.role,
       businessId: user.businessId,
       active: user.active,
-      subscriptionStatus: isActive ? "ACTIVE" : "INACTIVE", // Ajustado aquí
+      // Ahora enviamos explícitamente CANCELED si no cumple las reglas
+      subscriptionStatus: isActive ? "ACTIVE" : "CANCELED",
       subscription: subscription
     };
   }

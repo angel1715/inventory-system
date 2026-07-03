@@ -25,7 +25,8 @@ export type AuthContextType = {
   loading: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
-  loadUser: () => Promise<void>;
+  loadUser: () => Promise<void>; // Esta es la que refresca
+  refreshUser: () => Promise<void>; // Alias para claridad
   isOwner: () => boolean;
   isEmployee: () => boolean;
 };
@@ -37,29 +38,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   // AQUÍ ES DONDE REEMPLAZAS TODO EL LOADUSER
+  // En AuthProvider, asegúrate de esto:
   const loadUser = useCallback(async () => {
     const token = Cookies.get("token");
-    console.log("DEBUG: Token detectado en cookies:", token);
-
     if (!token) {
       setLoading(false);
-      console.log("DEBUG: No hay token, cargando como invitado.");
       return;
     }
 
     try {
+      // IMPORTANTE: Asegúrate de que la función 'me()' en lib/api.ts
+      // NO tenga caché (a veces los navegadores cachean los GET)
       const data = await me();
-      console.log("🔥 DEBUG CRÍTICO - DATOS RECIBIDOS:", data);
       setUser(data);
     } catch (err) {
-      console.error("DEBUG: Error en API:", err);
       Cookies.remove("token");
       setUser(null);
     } finally {
       setLoading(false);
-      console.log("DEBUG: Proceso de carga finalizado.");
     }
-  }, []);
+  }, []); // Está bien, pero asegúrate de que 'me()' sea confiable.
 
   useEffect(() => {
     loadUser();
@@ -84,9 +82,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isOwner = () => user?.role === "OWNER";
   const isEmployee = () => user?.role === "EMPLOYEE";
 
+  const refreshUser = loadUser;
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, loadUser, isOwner, isEmployee }}
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        loadUser,
+        refreshUser, // Ahora disponible en el hook useAuth
+        isOwner,
+        isEmployee,
+      }}
     >
       {children}
     </AuthContext.Provider>

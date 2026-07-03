@@ -56,12 +56,12 @@ export class SubscriptionController {
         return await this.subscriptionService.approveManualPayment(businessId, paymentLogId, body.planType);
     }
 
-    // ESTE ES EL ÚNICO ENDPOINT PARA EL SWITCH
-    @Post('toggle-status/:businessId')
+    // ESTE ES EL ENDPOINT PARA EL SWITCH
+   @Post('toggle-status/:businessId')
     @Roles('ADMIN')
     async toggleStatus(
         @Param('businessId') businessId: string,
-        @Body('status') status: 'ACTIVE' | 'EXPIRED'
+        @Body('status') status: 'ACTIVE' | 'CANCELED' // Unificado a CANCELED
     ) {
         return await this.subscriptionService.toggleSubscriptionStatus(businessId, status);
     }
@@ -70,16 +70,11 @@ export class SubscriptionController {
     @Roles('ADMIN')
     async updatePlan(
         @Param('businessId') businessId: string,
-        @Body() body: { accessType: 'SUBSCRIPTION' | 'LIFETIME', subscriptionStatus: 'ACTIVE' | 'EXPIRED' }
+        @Body() body: { 
+            accessType: 'SUBSCRIPTION' | 'LIFETIME', 
+            subscriptionStatus: 'ACTIVE' | 'CANCELED' // Unificado a CANCELED
+        }
     ) {
-        // Ahora 'this.prisma' ya existe y no te dará error
-        return await this.prisma.subscription.update({
-            where: { businessId },
-            data: {
-                accessType: body.accessType,
-                subscriptionStatus: body.subscriptionStatus === 'ACTIVE' ? 'ACTIVE' : 'CANCELED',
-                currentPeriodEnd: body.accessType === 'LIFETIME' ? new Date(2099, 11, 31) : new Date()
-            }
-        });
+        return await this.subscriptionService.updatePlan(businessId, body);
     }
 }

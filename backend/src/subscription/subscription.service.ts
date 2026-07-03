@@ -185,23 +185,34 @@ export class SubscriptionService {
         });
     }
 
-    /**
-     * Cambia el estado de la suscripción (usado por el Switch del Admin)
-     */
-    async toggleSubscriptionStatus(businessId: string, status: 'ACTIVE' | 'EXPIRED') {
-        // 1. Definimos la fecha de vencimiento según la acción
-        const newEndDate = status === 'ACTIVE'
-            ? new Date(new Date().setMonth(new Date().getMonth() + 1))
-            : new Date(); // Si es EXPIRED, la fecha es hoy
+    // Agrégalo a tu SubscriptionService
+    async updatePlan(businessId: string, data: { accessType: 'SUBSCRIPTION' | 'LIFETIME', subscriptionStatus: 'ACTIVE' | 'CANCELED' }) {
+        const newEndDate = data.accessType === 'LIFETIME'
+            ? new Date(2099, 11, 31)
+            : new Date(new Date().setMonth(new Date().getMonth() + 1));
 
-        // 2. Definimos el estado para la base de datos (mapeo de 'EXPIRED' a 'CANCELED')
-        const dbStatus = status === 'ACTIVE' ? 'ACTIVE' : 'CANCELED';
-
-        // 3. Ejecutamos la actualización
         return await this.prisma.subscription.update({
             where: { businessId },
             data: {
-                subscriptionStatus: dbStatus,
+                accessType: data.accessType,
+                subscriptionStatus: data.subscriptionStatus,
+                currentPeriodEnd: newEndDate
+            }
+        });
+    }
+
+    /**
+     * Cambia el estado de la suscripción (usado por el Switch del Admin)
+     */
+    async toggleSubscriptionStatus(businessId: string, status: 'ACTIVE' | 'CANCELED') {
+        const newEndDate = status === 'ACTIVE'
+            ? new Date(new Date().setMonth(new Date().getMonth() + 1))
+            : new Date();
+
+        return await this.prisma.subscription.update({
+            where: { businessId },
+            data: {
+                subscriptionStatus: status, // Ya no necesitas mapear, envía el valor real
                 currentPeriodEnd: newEndDate
             }
         });
