@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import NewSequenceModal from "@/components/NewSequenceModal";
-import { uploadImage } from "@/lib/upload";
+import { uploadImage } from "@/lib/uploadImage"
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);

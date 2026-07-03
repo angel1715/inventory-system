@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { UploadCloud } from "lucide-react";
-import { uploadImage } from "@/lib/upload";
+import { uploadImage } from "@/lib/uploadImage";
 import { getSuppliers } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
