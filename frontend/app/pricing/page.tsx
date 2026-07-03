@@ -12,16 +12,30 @@ export default function PricingPage() {
   const handleManualPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+
     const formData = new FormData(e.currentTarget);
+    const file = formData.get("file") as File;
 
     try {
-      await uploadReceipt(formData);
-      toast.success(
-        "Comprobante enviado. El administrador lo revisará pronto.",
-      );
+      // 1. PRIMERO subimos la imagen a Cloudinary (necesitas importar tu función aquí)
+      const { uploadImage } = await import("@/lib/uploadImage");
+      const imageUrl = await uploadImage(file);
+
+      // 2. LUEGO construimos el objeto JSON que tu API espera
+      const payload = {
+        amount: Number(formData.get("amount")),
+        referenceNumber: formData.get("referenceNumber") as string,
+        receiptUrl: imageUrl,
+      };
+
+      // 3. ENVIAMOS el JSON a tu API
+      await uploadReceipt(payload);
+
+      toast.success("Comprobante enviado exitosamente.");
       setIsUploading(false);
-    } catch (error) {
-      toast.error("Error al enviar el comprobante");
+    } catch (error: any) {
+      console.error("Error completo:", error);
+      toast.error(error.message || "Error al enviar el comprobante");
     } finally {
       setLoading(false);
     }

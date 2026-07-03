@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadReceiptDto } from './dto/upload-receipt.dto';
 import { EmailService } from '../email/email.service';
@@ -28,15 +28,27 @@ export class SubscriptionService {
 
     // Agrega esto a tu SubscriptionService
     async createManualPaymentLog(businessId: string, dto: UploadReceiptDto) {
-        return await this.prisma.manualPaymentLog.create({
-            data: {
-                businessId,
-                amount: dto.amount,
-                referenceNumber: dto.referenceNumber,
-                receiptUrl: dto.receiptUrl,
-                status: 'PENDING',
-            },
-        });
+        try {
+            return await this.prisma.manualPaymentLog.create({
+                data: {
+                    businessId,
+                    amount: dto.amount,
+                    referenceNumber: dto.referenceNumber,
+                    receiptUrl: dto.receiptUrl,
+                    status: 'PENDING',
+                },
+            });
+        } catch (error: any) {
+            // Verificamos si es el error P2002 de Prisma (Unique constraint violation)
+            if (error?.code === 'P2002') {
+                this.logger.warn(`Intento de duplicado de referencia: ${dto.referenceNumber} para el negocio ${businessId}`);
+                throw new BadRequestException('Este número de referencia ya ha sido utilizado anteriormente.');
+            }
+
+            // Si es otro error, lo logueamos y lanzamos
+            this.logger.error(`Error al crear log de pago: ${error.message}`);
+            throw error;
+        }
     }
 
     /**

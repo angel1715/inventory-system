@@ -539,9 +539,9 @@ export const uploadReceipt = (data: any) =>
   request("/subscription/upload-receipt", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json", // Indispensable para que NestJS procese el DTO
+      "Content-Type": "application/json", // El servidor DEBE recibir esto
     },
-    body: JSON.stringify(data), // Convertimos el objeto a string
+    body: JSON.stringify(data),
   });
 
 // En lib/api.ts

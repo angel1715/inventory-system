@@ -14,11 +14,10 @@ export class SubscriptionController {
     // AdminController.ts (o SubscriptionController, donde esté tu POST)
     @UseGuards(JwtAuthGuard)
     @Post('upload-receipt')
-    // Elimina esto: @UseInterceptors(FileInterceptor('file')) 
-    async uploadReceipt(
-        @Request() req,
-        @Body() dto: UploadReceiptDto // Ahora recibirá el JSON directamente
-    ) {
+    async uploadReceipt(@Request() req, @Body() dto: UploadReceiptDto) {
+        console.log("--- LLEGÓ PETICIÓN AL BACKEND ---");
+        console.log("DTO recibido:", dto); // Si esto no aparece en la terminal de NestJS, el problema es el Frontend.
+
         const businessId = req.user.businessId;
         return await this.subscriptionService.createManualPaymentLog(businessId, dto);
     }
