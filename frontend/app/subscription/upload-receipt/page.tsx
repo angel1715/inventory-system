@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { uploadReceipt } from "@/lib/api"; // Asegúrate de tener esta función en tu api.ts
+import { uploadImage } from "@/lib/upload";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -10,19 +11,31 @@ export default function UploadReceiptPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData();
+    const form = e.currentTarget;
+    const file = form.file.files[0];
 
-    // Captura los valores de los inputs
-    formData.append("amount", e.currentTarget.amount.value);
-    formData.append("referenceNumber", e.currentTarget.referenceNumber.value);
-    formData.append("file", e.currentTarget.file.files[0]); // El archivo
+    if (!file) return;
 
     try {
       setLoading(true);
-      await uploadReceipt(formData); // ¡Ya usa tu nueva función de API!
+
+      // 1. Subir a Cloudinary primero
+      const imageUrl = await uploadImage(file);
+
+      // 2. Preparar el objeto con la URL completa y los datos del formulario
+      const payload = {
+        amount: Number(form.amount.value),
+        referenceNumber: form.referenceNumber.value,
+        receiptUrl: imageUrl, // Aquí enviamos la URL completa
+      };
+
+      // 3. Enviar al backend
+      await uploadReceipt(payload as any);
+
       toast.success("Comprobante enviado exitosamente.");
       router.push("/subscription/waiting-approval");
     } catch (error) {
+      console.error(error);
       toast.error("Error al subir el comprobante");
     } finally {
       setLoading(false);

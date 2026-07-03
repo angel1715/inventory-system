@@ -13,23 +13,13 @@ export class SubscriptionController {
 
     @UseGuards(JwtAuthGuard)
     @Post('upload-receipt')
-    @UseInterceptors(FileInterceptor('file'))
+    // @UseInterceptors(FileInterceptor('file')) // <--- COMENTA O QUITA ESTA LÍNEA
     async uploadReceipt(
         @Request() req,
-        @Body() dto: any, // Aquí recibiremos el monto y la referencia
-        @UploadedFile() file: Express.Multer.File // Aquí recibimos el archivo
+        @Body() dto: UploadReceiptDto // Ahora NestJS validará el JSON automáticamente
     ) {
-        if (!file) throw new BadRequestException('El comprobante es obligatorio');
-
-        // Aquí, en lugar de pasar solo el DTO, pasas el archivo o su ruta
-        // Para simplificar, puedes pasar el nombre del archivo o guardarlo en S3/servidor
         const businessId = req.user.businessId;
-
-        // Asumiendo que guardas el archivo en tu servidor o procesas el nombre
-        return await this.subscriptionService.createManualPaymentLog(businessId, {
-            ...dto,
-            receiptUrl: file.originalname // O la ruta donde lo guardes
-        });
+        return await this.subscriptionService.createManualPaymentLog(businessId, dto);
     }
 
     @Get('all-subscriptions')
@@ -57,7 +47,7 @@ export class SubscriptionController {
     }
 
     // ESTE ES EL ENDPOINT PARA EL SWITCH
-   @Post('toggle-status/:businessId')
+    @Post('toggle-status/:businessId')
     @Roles('ADMIN')
     async toggleStatus(
         @Param('businessId') businessId: string,
@@ -70,8 +60,8 @@ export class SubscriptionController {
     @Roles('ADMIN')
     async updatePlan(
         @Param('businessId') businessId: string,
-        @Body() body: { 
-            accessType: 'SUBSCRIPTION' | 'LIFETIME', 
+        @Body() body: {
+            accessType: 'SUBSCRIPTION' | 'LIFETIME',
             subscriptionStatus: 'ACTIVE' | 'CANCELED' // Unificado a CANCELED
         }
     ) {
