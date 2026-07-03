@@ -11,43 +11,46 @@ export default function SubscriptionGuard({
   const { user, loading, refreshUser } = useAuth();
   const router = useRouter();
 
+  // 1. Efecto de sincronización al cargar el componente
   useEffect(() => {
-    // Solo refrescamos si ya tenemos un usuario cargado
-    // Esto asegura que cada vez que entras al dashboard,
-    // se valide el estado actual contra la base de datos.
     if (user) {
       refreshUser();
     }
-  }, []); // Se ejecuta solo al montar el componente
+  }, []);
 
-  // Mientras carga, no hacemos nada (mantenemos el estado de espera)
+  // 2. Efecto de vigilancia (Guard)
+  useEffect(() => {
+    if (loading) return;
+
+    // Si es ADMIN, no hacemos ninguna validación de suscripción
+    if (user?.role === "ADMIN") return;
+
+    // Lógica para usuarios normales (OWNER/EMPLOYEE)
+    if (!user || user.subscriptionStatus !== "ACTIVE") {
+      console.log(
+        "DEBUG GUARD - Redirigiendo por estado:",
+        user?.subscriptionStatus,
+      );
+
+      if (user?.subscriptionStatus === "PENDING") {
+        router.replace("/subscription/waiting-approval");
+      } else {
+        // RUTA CORREGIDA: Apuntando a la raíz como se ve en tu estructura
+        router.replace("/pricing");
+      }
+    }
+  }, [loading, user, router]);
+
+  // Pantalla de carga mientras se valida la sesión
   if (loading) {
     return <div className="flex justify-center p-10">Cargando...</div>;
   }
 
-  // 1. SI ES ADMINISTRADOR, ACCESO TOTAL
-  if (user && user.role === "ADMIN") {
-    return <>{children}</>;
-  }
-
-  // 2. LÓGICA DE REDIRECCIÓN (Solo si NO es admin)
-  // Verificamos si el usuario no existe o no tiene estatus ACTIVO
-  if (!user || user.subscriptionStatus !== "ACTIVE") {
-    // Si el usuario existe pero está en otro estado, redirigimos
-    if (user) {
-      if (user.subscriptionStatus === "PENDING") {
-        router.replace("/subscription/waiting-approval");
-      } else {
-        // CANCELED o cualquier otro estado inválido
-        router.replace("/subscription/pricing");
-      }
-    }
-
-    // Si no hay usuario y ya terminó de cargar, podríamos ir al login
-    // pero aquí devolvemos null para evitar parpadeo de contenido privado
+  // Protección contra renderizado prematuro:
+  // Si no es admin y el estatus no es activo, devolvemos null mientras redirige
+  if (user?.role !== "ADMIN" && user?.subscriptionStatus !== "ACTIVE") {
     return null;
   }
 
-  // Si todo está bien, mostramos el contenido
   return <>{children}</>;
 }

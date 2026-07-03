@@ -1,4 +1,3 @@
-// components/AdminGuard.tsx
 "use client";
 import { useAuth } from "@/app/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -9,12 +8,26 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user?.role !== "ADMIN") {
-      router.replace("/dashboard"); // Si no es admin, lo echamos al dashboard
+    if (!loading) {
+      if (!user) {
+        // Si no está logueado, al login
+        router.replace("/login");
+      } else if (user.role !== "ADMIN") {
+        // Si está logueado pero no es admin, al dashboard
+        router.replace("/dashboard");
+      }
     }
   }, [loading, user, router]);
 
-  if (loading || user?.role !== "ADMIN") return null;
+  // Mientras carga, mostramos un indicador de carga
+  if (loading) {
+    return <div className="flex justify-center p-10">Verificando permisos...</div>;
+  }
+
+  // Solo renderizamos si es realmente ADMIN
+  if (user?.role !== "ADMIN") {
+    return null;
+  }
 
   return <>{children}</>;
 }
