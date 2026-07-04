@@ -32,13 +32,18 @@ async function bootstrap() {
   // =========================
   app.setGlobalPrefix("api");
 
-  const frontendUrl = configService.get<string>("FRONTEND_URL") || "http://localhost:3000";
 
+
+  const frontendUrl = configService.get<string>("FRONTEND_URL") || "https://inventory-system-theta-flax.vercel.app";
   // =========================
   // CORS
   // =========================
   app.enableCors({
-    origin: [frontendUrl], // Ahora acepta el valor de tu .env
+    // Si usas un arreglo, asegúrate de que todos los elementos sean string o RegExp
+    origin: [
+      frontendUrl,
+      /\.vercel\.app$/ // Esto es un RegExp, es válido
+    ] as (string | RegExp)[], // Forzamos el tipo para total tranquilidad
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
