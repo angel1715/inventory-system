@@ -12,10 +12,11 @@ async function main() {
     if (!business) {
         business = await prisma.business.create({
             data: {
-                name: "My Store",
-                slug: "my-store",
-                phone: "809-000-0000",
+                name: "OGAdmin",
+                slug: "OGAdmin",
+                phone: "809-747-0508",
                 address: "Santo Domingo",
+                email: "angelgarci310@gmail.com",
             },
         });
     }

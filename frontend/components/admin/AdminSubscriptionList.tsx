@@ -36,14 +36,13 @@ export default function AdminSubscriptionList() {
   };
 
   const handleApprove = async (businessId: string, logId: string) => {
+    console.log("Intentando aprobar:", { businessId, logId }); // <-- AÑADE ESTO
     const planType = selectedPlans[logId] || "SUBSCRIPTION";
     try {
       await approveManualPayment(businessId, logId, planType);
-      setPendings((prev) => prev.filter((p) => p.id !== logId));
-      toast.success(
-        `Suscripción ${planType === "LIFETIME" ? "Lifetime" : "Mensual"} aprobada`,
-      );
+      // ... resto del código
     } catch (error) {
+      console.error("Error completo:", error); // <-- AÑADE ESTO para ver qué falla
       toast.error("Error al aprobar el pago");
     }
   };

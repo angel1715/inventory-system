@@ -45,8 +45,12 @@ export class AuthService {
 
       // 4. Crear el negocio
       const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
-      const business = await tx.business.create({
-        data: { name: data.businessName.trim(), slug },
+      const business = await this.prisma.business.create({
+        data: {
+          name: data.businessName.trim(),
+          slug,
+          email: data.email // <-- ¡TIENES QUE AGREGAR ESTO!
+        },
       });
 
       // 5. Crear configuraciones base

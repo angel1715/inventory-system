@@ -107,7 +107,7 @@ model Business {
   name      String
   slug      String   @unique
   phone     String?
-  email     String?
+  email String @unique
   address   String?
   logoUrl   String?
   active    Boolean  @default(true)

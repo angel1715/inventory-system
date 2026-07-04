@@ -68,16 +68,25 @@ export class SubscriptionService {
 
         if (!log) throw new NotFoundException('Comprobante de pago no encontrado');
 
-        // 2. Ejecutamos la lógica de actualización (Transacción)
+        // Calculamos la fecha de expiración fuera de la transacción para mayor limpieza
+        const newExpiryDate = planType === 'LIFETIME'
+            ? new Date(2099, 11, 31)
+            : new Date(new Date().setMonth(new Date().getMonth() + 1));
+
+        // 2. Ejecutamos la lógica de actualización (Transacción con UPSERT)
         const result = await this.prisma.$transaction([
-            this.prisma.subscription.update({
+            this.prisma.subscription.upsert({
                 where: { businessId },
-                data: {
+                update: {
                     accessType: planType,
                     subscriptionStatus: 'ACTIVE',
-                    currentPeriodEnd: planType === 'LIFETIME'
-                        ? new Date(2099, 11, 31)
-                        : new Date(new Date().setMonth(new Date().getMonth() + 1))
+                    currentPeriodEnd: newExpiryDate
+                },
+                create: {
+                    businessId: businessId,
+                    accessType: planType,
+                    subscriptionStatus: 'ACTIVE',
+                    currentPeriodEnd: newExpiryDate
                 },
             }),
             this.prisma.manualPaymentLog.update({
@@ -87,11 +96,16 @@ export class SubscriptionService {
         ]);
 
         // 3. Notificación al Cliente
-        await this.emailService.sendPaymentStatusUpdate(
-            log.business.email || 'correo-no-disponible@ejemplo.com',
-            log.business.name,
-            'APPROVED'
-        );
+        try {
+            await this.emailService.sendPaymentStatusUpdate(
+                log.business.email || 'correo-no-disponible@ejemplo.com',
+                log.business.name,
+                'APPROVED'
+            );
+        } catch (emailError) {
+            console.error("Error al enviar email de notificación:", emailError);
+            // No lanzamos error aquí para no revertir la aprobación del pago
+        }
 
         return result;
     }
