@@ -60,6 +60,7 @@ export class SubscriptionService {
     // En subscription.service.ts
 
     async approveManualPayment(businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') {
+
         // 1. Buscamos el log con la relación al negocio
         const log = await this.prisma.manualPaymentLog.findUnique({
             where: { id: paymentLogId },
@@ -68,12 +69,16 @@ export class SubscriptionService {
 
         if (!log) throw new NotFoundException('Comprobante de pago no encontrado');
 
-        // Calculamos la fecha de expiración fuera de la transacción para mayor limpieza
+        // AJUSTE DE SEGURIDAD: Validar que el negocio exista antes de continuar
+        if (!log.business) {
+            throw new Error('El comprobante no tiene un negocio asociado en la base de datos');
+        }
+
         const newExpiryDate = planType === 'LIFETIME'
             ? new Date(2099, 11, 31)
             : new Date(new Date().setMonth(new Date().getMonth() + 1));
 
-        // 2. Ejecutamos la lógica de actualización (Transacción con UPSERT)
+        // 2. Transacción
         const result = await this.prisma.$transaction([
             this.prisma.subscription.upsert({
                 where: { businessId },
@@ -95,21 +100,31 @@ export class SubscriptionService {
             }),
         ]);
 
-        // 3. Notificación al Cliente
+        // 3. Notificación al Cliente con DEBUGGING EXPLÍCITO
         try {
+            const userEmail = log.business.email;
+            const userName = log.business.name;
+
+            console.log(`[DEBUG] Intentando enviar email a: ${userEmail} para el negocio: ${userName}`);
+
+            if (!userEmail) {
+                console.warn(`[WARN] El negocio ${userName} no tiene email configurado.`);
+            }
+
             await this.emailService.sendPaymentStatusUpdate(
-                log.business.email || 'correo-no-disponible@ejemplo.com',
-                log.business.name,
+                userEmail || 'correo-no-disponible@ejemplo.com',
+                userName || 'Usuario',
                 'APPROVED'
             );
+
+            console.log("[DEBUG] Email enviado correctamente desde producción");
+
         } catch (emailError) {
-            console.error("Error al enviar email de notificación:", emailError);
-            // No lanzamos error aquí para no revertir la aprobación del pago
+            console.error("[ERROR CRÍTICO] Fallo al enviar email en producción:", emailError);
         }
 
         return result;
     }
-
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
     async handleSubscriptionReminders() {
         this.logger.log('Ejecutando revisión de suscripciones próximas a vencer...');

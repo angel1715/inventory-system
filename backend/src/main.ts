@@ -39,11 +39,11 @@ async function bootstrap() {
   // CORS
   // =========================
   app.enableCors({
-    // Si usas un arreglo, asegúrate de que todos los elementos sean string o RegExp
+    
     origin: [
       frontendUrl,
-      /\.vercel\.app$/ // Esto es un RegExp, es válido
-    ] as (string | RegExp)[], // Forzamos el tipo para total tranquilidad
+      /\.vercel\.app$/ 
+    ] as (string | RegExp)[],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
