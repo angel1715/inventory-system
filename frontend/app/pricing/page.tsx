@@ -76,7 +76,7 @@ export default function PricingPage() {
 
             <div className="text-left mb-8">
               <span className="text-5xl font-extrabold text-gray-900">
-                RD$1,500
+                RD$1,000
               </span>
               <span className="text-gray-500 font-medium">/mes</span>
             </div>
@@ -174,7 +174,7 @@ export default function PricingPage() {
                   type="number"
                   required
                   className="text-gray-700 w-full p-3 border rounded-xl"
-                  placeholder="RD$1,500"
+                  placeholder="RD$1,000"
                 />
               </div>
               <div>
