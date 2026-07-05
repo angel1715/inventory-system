@@ -21,42 +21,25 @@ export class EmailService {
 
     async sendResetPasswordEmail(email: string, token: string) {
         const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}&email=${email}`;
+
         try {
-            await this.transporter.sendMail({
+            const info = await this.transporter.sendMail({
                 from: `"Sistema OG-Admin" <${this.SENDER_EMAIL}>`,
                 to: email,
                 subject: 'Recuperación de contraseña',
                 html: `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px;">
-                        <h1>¿Has olvidado tu contraseña?</h1>
-                        <p>Haz clic para restablecerla (expira en 15 min):</p>
-                        <a href="${resetUrl}" style="background: #000; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Restablecer</a>
-                    </div>
-                `
+                <div style="font-family: sans-serif;">
+                    <h1>¿Has olvidado tu contraseña?</h1>
+                    <a href="${resetUrl}">Restablecer contraseña</a>
+                </div>
+            `
             });
-            this.logger.log(`Correo de recuperación enviado a: ${email}`);
-        } catch (error: any) {
-            this.logger.error(`Error enviando correo de recuperación: ${error.message}`);
-        }
-    }
 
-    async sendSubscriptionReminder(email: string, businessName: string, expiryDate: Date) {
-        const formattedDate = expiryDate.toLocaleDateString('es-DO', { year: 'numeric', month: 'long', day: 'numeric' });
-        try {
-            await this.transporter.sendMail({
-                from: `"Sistema OG-Admin" <${this.SENDER_EMAIL}>`,
-                to: email,
-                subject: 'Recordatorio: Tu suscripción vence pronto',
-                html: `
-                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee;">
-                        <h2 style="color: #333;">Hola ${businessName},</h2>
-                        <p>Tu suscripción vence el <strong>${formattedDate}</strong>.</p>
-                        <p>Por favor, realiza tu pago a tiempo para evitar interrupciones.</p>
-                    </div>
-                `
-            });
+            this.logger.log("===== RESPUESTA SMTP =====");
+            this.logger.log(JSON.stringify(info, null, 2));
+
         } catch (error: any) {
-            this.logger.error(`Error enviando recordatorio: ${error.message}`);
+            this.logger.error(error);
         }
     }
 
