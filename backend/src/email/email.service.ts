@@ -143,4 +143,51 @@ export class EmailService implements OnModuleInit {
             this.logger.error(error?.response?.text || error.message);
         }
     }
+
+    async sendSubscriptionReminder(
+        email: string,
+        businessName: string,
+        expiryDate: Date
+    ) {
+        const formattedDate = expiryDate.toLocaleDateString('es-DO', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        });
+
+        try {
+            const response = await this.client.sendTransacEmail({
+                sender: {
+                    email: this.SENDER_EMAIL,
+                    name: 'Sistema OG-Admin',
+                },
+                to: [{ email }],
+                subject: '⏰ Recordatorio: tu suscripción vence pronto',
+                htmlContent: `
+                <div style="font-family:sans-serif;padding:20px;">
+                    <h2>Hola ${businessName}</h2>
+
+                    <p>
+                        Tu suscripción vence el
+                        <strong>${formattedDate}</strong>.
+                    </p>
+
+                    <p>
+                        Por favor realiza el pago para evitar interrupciones.
+                    </p>
+
+                    <hr/>
+                    <small>Sistema OG-Admin</small>
+                </div>
+            `,
+            });
+
+            this.logger.log('Subscription reminder enviado');
+            this.logger.log(JSON.stringify(response));
+
+        } catch (error: any) {
+            this.logger.error('Error enviando reminder');
+            this.logger.error(error?.response?.text || error.message);
+        }
+    }
 }
