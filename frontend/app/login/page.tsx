@@ -144,9 +144,8 @@ export default function LoginPage() {
         <p className="text-center text-zinc-400 text-xs mt-8">
           © {new Date().getFullYear()}{" "}
           <span className="bg-gradient-to-br from-cyan-400 via-violet-500 to-fuchsia-500 bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(165,243,252,0.5)]">
-            OG
+            OGAdmin
           </span>
-          Admin
         </p>
       </div>
     </div>
