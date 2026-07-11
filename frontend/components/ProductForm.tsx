@@ -101,7 +101,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
       {/* HEADER */}
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">
-          {initialData ? "Edit Product" : "Create Product"}
+          {initialData ? "Editar Producto" : "Registrar Producto"}
         </h2>
         <p className="text-sm text-gray-500 mt-1">
           Manage inventory product information
@@ -110,7 +110,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
 
       {!isValid && (
         <div className="mb-6 bg-red-50 border border-red-200 text-red-600 rounded-2xl p-4">
-          Please fix the highlighted fields before saving.
+          Por favor llena todos los campos resaltados antes de guardar.
         </div>
       )}
 
@@ -149,14 +149,14 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* SUPPLIER */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Supplier
+            Suplidor
           </label>
           <select
             value={form.supplierId}
             onChange={(e) => handleChange("supplierId", e.target.value)}
             className="w-full border border-gray-200 rounded-2xl p-3 text-gray-800 outline-none focus:ring-2 focus:ring-black bg-white"
           >
-            <option value="">Select supplier</option>
+            <option value="">Seleccionar suplidor</option>
             {suppliers.map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name}
@@ -168,7 +168,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* CATEGORY - 🔥 NUEVA INTEGRACIÓN */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Category
+            Categoria
           </label>
           <select
             value={form.category}
@@ -186,7 +186,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* COST PRICE */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Cost Price (RD$)
+            Precio de Compra (RD$)
           </label>
           <input
             type="number"
@@ -199,7 +199,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* SALE PRICE */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Sale Price (RD$)
+            Precio de Venta (RD$)
           </label>
           <input
             type="number"
@@ -212,7 +212,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* STOCK */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Initial Stock
+            Stock Inicial
           </label>
           <input
             type="number"
@@ -225,7 +225,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
         {/* MIN STOCK */}
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
-            Minimum Stock
+            Stock Minimo
           </label>
           <input
             type="number"
@@ -276,7 +276,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
       {/* IMAGE UPLOAD */}
       <div className="mt-8">
         <label className="block text-sm font-medium mb-3 text-gray-700">
-          Product Image
+          Imagen del producto
         </label>
         <label className="border-2 border-dashed border-gray-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-black transition bg-gray-50">
           <input
@@ -286,7 +286,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
             className="hidden"
           />
           <UploadCloud className="w-10 h-10 text-gray-400 mb-3" />
-          <p className="font-semibold text-gray-700">Click to upload image</p>
+          <p className="font-semibold text-gray-700">Click Para subir imagen</p>
         </label>
         {preview && (
           <Image
@@ -306,7 +306,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
           onClick={() => router.push("/products")}
           className="flex-1 border border-gray-300 bg-red-500 py-4 rounded-2xl font-semibold hover:bg-red-400 transition"
         >
-          Cancel
+          Cancelar
         </button>
         <button
           type="button"
@@ -314,7 +314,7 @@ export default function ProductForm({ initialData, onSubmit, loading }: any) {
           disabled={loading || uploading || !isValid}
           className="flex-1 bg-black text-white py-4 rounded-2xl font-semibold hover:opacity-80 transition"
         >
-          {loading || uploading ? "Saving..." : "Save Product"}
+          {loading || uploading ? "Guardando..." : "Guardar Producto"}
         </button>
       </div>
     </div>

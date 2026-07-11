@@ -64,8 +64,8 @@ export default function ProductsPage() {
       <div className="min-h-screen bg-gray-100 p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Products</h1>
-            <p className="text-gray-500">Manage your inventory</p>
+            <h1 className="text-3xl font-bold text-gray-900">Productos</h1>
+            <p className="text-gray-500">Administra tu inventario</p>
           </div>
           <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
             <Link
@@ -78,7 +78,7 @@ export default function ProductsPage() {
               href="/products/new"
               className="bg-black text-white px-5 py-3 rounded-2xl hover:opacity-90 transition text-center w-full md:w-auto"
             >
-              + Add Product
+              + Agregar Producto
             </Link>
           </div>
         </div>
@@ -96,13 +96,13 @@ export default function ProductsPage() {
         <div className="bg-white rounded-3xl border overflow-hidden">
           {loading ? (
             <div className="p-10 text-center text-gray-500">
-              Loading products...
+              Carcando productos...
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-16 text-center">
               <Package className="w-14 h-14 mx-auto text-gray-300 mb-4" />
               <h2 className="text-xl font-semibold text-gray-700">
-                No products found
+                Productos no encontrado
               </h2>
             </div>
           ) : (
@@ -111,7 +111,7 @@ export default function ProductsPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Product
+                      Producto
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
                       Barcode
@@ -120,13 +120,13 @@ export default function ProductsPage() {
                       Stock
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Cost
+                      Costo
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Price
+                      Precio
                     </th>
                     <th className="text-right p-4 text-sm text-gray-500">
-                      Actions
+                      Actiones
                     </th>
                   </tr>
                 </thead>
@@ -175,7 +175,7 @@ export default function ProductsPage() {
                             href={`/products/edit/${product.id}`}
                             className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 text-sm"
                           >
-                            Edit
+                            Editar
                           </Link>
                           <button
                             onClick={() => handleToggle(product.id)}
