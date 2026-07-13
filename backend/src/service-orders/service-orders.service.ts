@@ -384,14 +384,14 @@ export class ServiceOrdersService {
                     deviceModel: dto.deviceModel ?? order.deviceModel,
                     serialOrImei: dto.serialOrImei ?? order.serialOrImei,
                     problem: dto.problem ?? order.problem,
-                    diagnostic: dto.diagnostic,
 
-                    repairSolution: dto.repairSolution,
-
-                    estimatedRepairTime: dto.estimatedRepairTime,
-
-                    customerApproved: dto.customerApproved,
-                }
+                    diagnostic: dto.diagnostic ?? order.diagnostic,
+                    repairSolution: dto.repairSolution ?? order.repairSolution,
+                    estimatedRepairTime:
+                        dto.estimatedRepairTime ?? order.estimatedRepairTime,
+                    customerApproved:
+                        dto.customerApproved ?? order.customerApproved,
+                },
             });
 
             await tx.serviceLog.create({

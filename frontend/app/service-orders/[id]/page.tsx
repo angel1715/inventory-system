@@ -41,6 +41,11 @@ export default function ServiceOrderDetailPage() {
     deviceModel: "",
     serialOrImei: "",
     problem: "",
+
+    diagnostic: "",
+    repairSolution: "",
+    estimatedRepairTime: "",
+    customerApproved: false,
   });
 
   useEffect(() => {
@@ -54,6 +59,18 @@ export default function ServiceOrderDetailPage() {
       const data = await getServiceOrder(id);
       setOrder(data);
       setNewStatus(data.status);
+
+      setInfoForm({
+        deviceBrand: data.deviceBrand ?? "",
+        deviceModel: data.deviceModel ?? "",
+        serialOrImei: data.serialOrImei ?? "",
+        problem: data.problem ?? "",
+
+        diagnostic: data.diagnostic ?? "",
+        repairSolution: data.repairSolution ?? "",
+        estimatedRepairTime: data.estimatedRepairTime ?? "",
+        customerApproved: data.customerApproved ?? false,
+      });
     } catch (err) {
       toast.error("Error al cargar detalles");
     } finally {
