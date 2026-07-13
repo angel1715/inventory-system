@@ -1,10 +1,26 @@
-import { IsOptional, IsString, Length } from "class-validator";
+import { IsOptional, IsString, Length, IsBoolean, IsNumber } from "class-validator";
 
 export class UpdateServiceOrderDto {
     @IsOptional()
     @IsString()
     @Length(1, 100)
     deviceBrand?: string;
+
+    @IsOptional()
+    @IsString()
+    diagnostic?: string;
+
+    @IsOptional()
+    @IsString()
+    repairSolution?: string;
+
+    @IsOptional()
+    @IsString()
+    estimatedRepairTime?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    customerApproved?: boolean;
 
     @IsOptional()
     @IsString()

@@ -384,6 +384,13 @@ export class ServiceOrdersService {
                     deviceModel: dto.deviceModel ?? order.deviceModel,
                     serialOrImei: dto.serialOrImei ?? order.serialOrImei,
                     problem: dto.problem ?? order.problem,
+                    diagnostic: dto.diagnostic,
+
+                    repairSolution: dto.repairSolution,
+
+                    estimatedRepairTime: dto.estimatedRepairTime,
+
+                    customerApproved: dto.customerApproved,
                 }
             });
 
