@@ -358,7 +358,7 @@ export default function ServiceOrderDetailPage() {
                     type="number"
                     value={newLaborCost}
                     onChange={(e) => setNewLaborCost(Number(e.target.value))}
-                    className="flex-1 border border-zinc-200 rounded-2xl px-4 py-3"
+                    className="text-gray-700 flex-1 border border-zinc-200 rounded-2xl px-4 py-3"
                   />
                   <button
                     onClick={handleUpdateLabor}
@@ -378,7 +378,7 @@ export default function ServiceOrderDetailPage() {
             <div className="pt-6 border-t border-zinc-100 space-y-4">
               <button
                 onClick={() => setIsStatusModalOpen(true)}
-                className="w-full py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-semibold transition"
+                className="text-gray-700 w-full py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-semibold transition"
               >
                 Cambiar Estatus
               </button>
@@ -412,7 +412,7 @@ export default function ServiceOrderDetailPage() {
               Agregar Repuesto
             </h3>
             <select
-              className="w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
+              className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
               onChange={(e) => setSelectedProduct(e.target.value)}
             >
               <option value="">Seleccionar producto...</option>
@@ -427,7 +427,7 @@ export default function ServiceOrderDetailPage() {
               min="1"
               value={quantity}
               onChange={(e) => setQuantity(Number(e.target.value))}
-              className="w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-8"
+              className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-8"
               placeholder="Cantidad"
             />
             <div className="flex gap-4">
@@ -451,13 +451,13 @@ export default function ServiceOrderDetailPage() {
       {isStatusModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 w-full max-w-md shadow-xl">
-            <h3 className="text-2xl font-semibold text-zinc-900 mb-6">
+            <h3 className="text-gray-700 text-2xl font-semibold text-zinc-900 mb-6">
               Cambiar Estatus
             </h3>
             <select
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
-              className="w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
+              className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
             >
               <option value="RECEIVED">Recibido</option>
               <option value="DIAGNOSING">Diagnosticando</option>
@@ -468,7 +468,7 @@ export default function ServiceOrderDetailPage() {
               placeholder="Nota del cambio (obligatoria)"
               value={changeNote}
               onChange={(e) => setChangeNote(e.target.value)}
-              className="w-full border border-zinc-200 rounded-2xl px-4 py-4 min-h-[120px] mb-8"
+              className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 min-h-[120px] mb-8"
             />
             <div className="flex gap-4">
               <button
@@ -479,7 +479,7 @@ export default function ServiceOrderDetailPage() {
               </button>
               <button
                 onClick={handleUpdateStatus}
-                className="flex-1 py-4 bg-zinc-900 text-white rounded-2xl font-semibold"
+                className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-semibold"
               >
                 Confirmar
               </button>
