@@ -745,8 +745,6 @@ model ServiceItem {
 
   //---------------------------------------------------
 
-  createdAt DateTime @default(now())
-
   @@index([serviceOrderId])
 
   @@index([productId])
