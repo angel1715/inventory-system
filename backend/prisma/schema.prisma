@@ -767,9 +767,9 @@ model ServiceLog {
   // EVENTO
   //---------------------------------------------------
 
-  statusFrom ServiceStatus
+  statusFrom String
 
-statusTo ServiceStatus
+statusTo String
 
 action String @default("SYSTEM")
 
