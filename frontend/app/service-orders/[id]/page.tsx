@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react"; // Quitamos 'use'
+import { useEffect, useState } from "react";
 import {
   getServiceOrder,
   addServiceItem,
@@ -12,13 +12,11 @@ import {
 } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, ArrowLeft } from "lucide-react";
-import { useRouter, useParams } from "next/navigation"; // Agregamos useParams
+import { useRouter, useParams } from "next/navigation";
 
 export default function ServiceOrderDetailPage() {
-  // --- INICIO DEL BLOQUE AJUSTADO ---
   const params = useParams<{ id: string }>();
   const id = params?.id as string;
-  // --- FIN DEL BLOQUE AJUSTADO ---
 
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +136,6 @@ export default function ServiceOrderDetailPage() {
 
   const handleUpdateStatus = async () => {
     if (!changeNote.trim()) return toast.error("La nota es obligatoria");
-    // BLINDAJE: Impedimos poner el estado en DELIVERED desde aquí
     if (newStatus === "DELIVERED") {
       return toast.error(
         "Para entregar la orden, usa el botón verde 'Entregar Reparación'.",
@@ -163,91 +160,73 @@ export default function ServiceOrderDetailPage() {
     return (
       <div className="p-8 text-gray-500 text-center">Orden no encontrada.</div>
     );
+
   return (
     <div className="p-8 max-w-5xl mx-auto min-h-screen bg-gray-50">
-      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm mb-6">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              Ticket {order.ticketNumber}
-            </h2>
-            <p className="text-sm text-gray-500">Gestión de reparación</p>
+      {/* ==================== NUEVO HEADER MEJORADO ==================== */}
+      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden mb-8">
+        <div className="border-b bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-8">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-blue-100 text-sm">Orden de Servicio</p>
+              <h1 className="text-3xl font-bold mt-1">#{order.ticketNumber}</h1>
+              <p className="mt-3 text-blue-100 text-lg">
+                {order.customer?.name}
+              </p>
+            </div>
+            <div>
+              <span
+                className={`px-4 py-2 rounded-full font-semibold text-sm ${
+                  order.status === "RECEIVED"
+                    ? "bg-yellow-400 text-black"
+                    : order.status === "DIAGNOSING"
+                      ? "bg-orange-500"
+                      : order.status === "REPAIRED"
+                        ? "bg-green-500"
+                        : order.status === "DELIVERED"
+                          ? "bg-emerald-600"
+                          : "bg-gray-900"
+                }`}
+              >
+                {order.status}
+              </span>
+            </div>
           </div>
-          {order.status !== "DELIVERED" && (
-            <button
-              onClick={() => {
-                if (!isEditingInfo) {
-                  setInfoForm({
-                    deviceBrand: order.deviceBrand,
-                    deviceModel: order.deviceModel,
-                    serialOrImei: order.serialOrImei,
-                    problem: order.problem,
-                  });
-                }
-                setIsEditingInfo(!isEditingInfo);
-              }}
-              className="text-sm font-bold text-blue-600 hover:underline"
-            >
-              {isEditingInfo ? "Cancelar" : "Editar Información"}
-            </button>
-          )}
         </div>
 
-        {isEditingInfo ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in">
-            <input
-              className="text-gray-700 p-2 border rounded-lg"
-              value={infoForm.deviceBrand}
-              onChange={(e) =>
-                setInfoForm({ ...infoForm, deviceBrand: e.target.value })
-              }
-              placeholder="Marca"
-            />
-            <input
-              className="text-gray-700 p-2 border rounded-lg"
-              value={infoForm.deviceModel}
-              onChange={(e) =>
-                setInfoForm({ ...infoForm, deviceModel: e.target.value })
-              }
-              placeholder="Modelo"
-            />
-            <input
-              className="text-gray-700 p-2 border rounded-lg col-span-2"
-              value={infoForm.serialOrImei}
-              onChange={(e) =>
-                setInfoForm({ ...infoForm, serialOrImei: e.target.value })
-              }
-              placeholder="Serial o IMEI"
-            />
-            <textarea
-              className="text-gray-700 p-2 border rounded-lg col-span-2"
-              value={infoForm.problem}
-              onChange={(e) =>
-                setInfoForm({ ...infoForm, problem: e.target.value })
-              }
-              placeholder="Problema"
-            />
-            <button
-              onClick={handleUpdateInfo}
-              className="bg-black text-white py-2 rounded-lg font-bold"
-            >
-              Guardar Cambios
-            </button>
-          </div>
-        ) : (
-          <div className="text-gray-700">
-            <p className="font-semibold">
+        {/* Resumen rápido */}
+        <div className="grid md:grid-cols-4 divide-x">
+          <div className="p-6">
+            <p className="text-sm text-gray-500">Equipo</p>
+            <p className="font-semibold mt-1">
               {order.deviceBrand} {order.deviceModel}
             </p>
-            <p className="text-sm text-gray-500">
-              IMEI/Serial: {order.serialOrImei}
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-500">IMEI / Serial</p>
+            <p className="font-semibold mt-1">{order.serialOrImei || "-"}</p>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-500">Técnico</p>
+            <p className="font-semibold mt-1">
+              {order.technician?.name || "Sin asignar"}
             </p>
           </div>
-        )}
+          <div className="p-6">
+            <p className="text-sm text-gray-500">Entrega estimada</p>
+            <p className="font-semibold mt-1">
+              {order.estimatedDelivery
+                ? new Date(order.estimatedDelivery).toLocaleDateString()
+                : "-"}
+            </p>
+          </div>
+        </div>
       </div>
 
+      {/* ==================== CONTENIDO PRINCIPAL ==================== */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
+          {/* Problema Reportado */}
           <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <h3 className="font-bold text-gray-900 mb-4">Problema Reportado</h3>
             <p className="text-gray-700 bg-gray-50 p-4 rounded-2xl">
@@ -255,6 +234,65 @@ export default function ServiceOrderDetailPage() {
             </p>
           </div>
 
+          {/* Nueva: Información del Equipo */}
+          <div className="bg-white rounded-3xl border shadow-sm">
+            <div className="border-b p-6">
+              <h2 className="text-xl font-semibold">Información del Equipo</h2>
+            </div>
+            <div className="p-6 grid md:grid-cols-2 gap-6">
+              <div>
+                <span className="text-gray-500 text-sm">Tipo</span>
+                <p className="font-semibold">{order.deviceType || "-"}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-sm">Color</span>
+                <p className="font-semibold">{order.color || "-"}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-sm">Contraseña</span>
+                <p className="font-semibold">{order.password || "-"}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 text-sm">Nivel de batería</span>
+                <p className="font-semibold">{order.batteryLevel ?? "-"}%</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Nueva: Accesorios Recibidos */}
+          <div className="bg-white rounded-3xl border shadow-sm">
+            <div className="border-b p-6">
+              <h2 className="text-xl font-semibold">Accesorios Recibidos</h2>
+            </div>
+            <div className="p-6 flex flex-wrap gap-3">
+              {order.accessories?.length ? (
+                order.accessories.map((item: string) => (
+                  <span
+                    key={item}
+                    className="px-4 py-2 rounded-full bg-blue-100 text-blue-700 font-medium"
+                  >
+                    {item}
+                  </span>
+                ))
+              ) : (
+                <p className="text-gray-400">No se registraron accesorios.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Nueva: Estado Físico */}
+          <div className="bg-white rounded-3xl border shadow-sm">
+            <div className="border-b p-6">
+              <h2 className="text-xl font-semibold">Estado Físico</h2>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-700 whitespace-pre-wrap">
+                {order.cosmeticCondition || "Sin observaciones"}
+              </p>
+            </div>
+          </div>
+
+          {/* Repuestos Utilizados */}
           <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
             <h3 className="font-bold text-gray-900 mb-4">
               Repuestos Utilizados
@@ -281,6 +319,7 @@ export default function ServiceOrderDetailPage() {
           </div>
         </div>
 
+        {/* Sidebar */}
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm h-fit space-y-6">
           <div>
             <span className="text-sm font-bold text-gray-500 uppercase">
@@ -355,7 +394,7 @@ export default function ServiceOrderDetailPage() {
         </div>
       </div>
 
-      {/* --- MODALES --- */}
+      {/* ==================== MODALES (sin cambios) ==================== */}
 
       {isItemModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

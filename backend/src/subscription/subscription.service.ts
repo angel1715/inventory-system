@@ -158,7 +158,7 @@ export class SubscriptionService {
      */
     async createTrial(businessId: string) {
         const trialExpiry = new Date();
-        trialExpiry.setDate(trialExpiry.getDate() + 7);
+        trialExpiry.setDate(trialExpiry.getDate() + 14);
 
         return await this.prisma.subscription.create({
             data: {

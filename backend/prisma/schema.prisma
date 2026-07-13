@@ -98,6 +98,31 @@ enum SubscriptionStatus {
   INCOMPLETE
 }
 
+enum DeviceType {
+  PHONE
+  LAPTOP
+  TABLET
+  PC
+  PRINTER
+  TV
+  CONSOLE
+  OTHER
+}
+
+enum ServicePhotoType {
+  RECEPTION
+  DIAGNOSIS
+  REPAIR
+  DELIVERY
+  WARRANTY
+  OTHER
+}
+
+enum SaleOrigin {
+  POS
+  SERVICE
+}
+
 // ==========================================
 // MODELS
 // ==========================================
@@ -200,23 +225,68 @@ model User {
   password         String
   role             Role     @default(OWNER)
   active           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  //---------------------------------------------------
+  // RELACIÓN CON NEGOCIO
+  //---------------------------------------------------
 
   businessId String?
   business   Business? @relation(fields: [businessId], references: [id])
+
+  //---------------------------------------------------
+  // SUSCRIPCIÓN
+  //---------------------------------------------------
 
   subscription Subscription? @relation("UserSubscription")
 
   passwordResetTokens PasswordResetToken[]
 
-  sales              Sale[]
-  cashSessions       CashSession[]
-  auditLogs          AuditLog[]
+  //---------------------------------------------------
+  // VENTAS
+  //---------------------------------------------------
+
+  sales Sale[]
+
+  //---------------------------------------------------
+  // CAJA
+  //---------------------------------------------------
+
+  cashSessions CashSession[]
+
+  //---------------------------------------------------
+  // INVENTARIO
+  //---------------------------------------------------
+
   inventoryMovements InventoryMovement[]
-  assignedServices   ServiceOrder[]       @relation("TechnicianServices")
+
+  //---------------------------------------------------
+  // AUDITORÍA
+  //---------------------------------------------------
+
+  auditLogs AuditLog[]
+
+  //---------------------------------------------------
+  // SERVICIO TÉCNICO
+  //---------------------------------------------------
+
+  receivedServices ServiceOrder[] @relation("ReceivedServices")
+
+  assignedServices ServiceOrder[] @relation("TechnicianServices")
+
+  deliveredServices ServiceOrder[] @relation("DeliveredServices")
+
+  serviceLogs ServiceLog[]
+
+  uploadedServicePhotos ServicePhoto[]
+
+  //---------------------------------------------------
+  // CUENTAS POR COBRAR
+  //---------------------------------------------------
+
   createdReceivables AccountsReceivable[] @relation("ReceivableCreatedBy")
-  serviceLogs        ServiceLog[]
 }
 
 model PasswordResetToken {
@@ -438,6 +508,7 @@ model Sale {
   discount      Decimal
   total         Decimal
   paymentMethod PaymentMethod
+  
 
   cashSessionId String?
   cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
@@ -451,6 +522,14 @@ model Sale {
   creditMovements    CreditMovement[]
   items              SaleItem[]
   accountsReceivable AccountsReceivable?
+
+  //---------------------------------------------------
+// REPARACIONES
+//---------------------------------------------------
+
+serviceOrderId String? @unique
+
+serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
   createdAt          DateTime            @default(now())
 
   @@unique([businessId, idempotencyKey])
@@ -476,54 +555,235 @@ model SaleItem {
 model ServiceOrder {
   id           String   @id @default(cuid())
   ticketNumber String
-  businessId   String
-  business     Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
 
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
+ //---------------------------------------------------
+// RELACIONES
+//---------------------------------------------------
 
-  technicianId String?
-  technician   User?         @relation("TechnicianServices", fields: [technicianId], references: [id])
-  deliveredAt  DateTime?
-  deviceBrand  String
-  deviceModel  String
+businessId String
+business   Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
+
+customerId String
+customer   Customer @relation(fields: [customerId], references: [id])
+
+receivedById String?
+receivedBy User? @relation("ReceivedServices", fields: [receivedById], references: [id])
+
+technicianId String?
+technician User? @relation("TechnicianServices", fields: [technicianId], references: [id])
+
+deliveredById String?
+deliveredBy User? @relation("DeliveredServices", fields: [deliveredById], references: [id])
+
+  //---------------------------------------------------
+  // INFORMACIÓN DEL EQUIPO
+  //---------------------------------------------------
+
+  deviceType DeviceType?
+
+  deviceBrand String
+
+  deviceModel String
+
   serialOrImei String?
-  problem      String
-  diagnostic   String?
-  laborCost    Decimal       @default(0.00)
-  totalAmount  Decimal       @default(0.00)
-  status       ServiceStatus @default(RECEIVED)
+
+  color String?
+
+  password String?
+
+  accessories Json?
+
+  cosmeticCondition String?
+
+  batteryLevel Int?
+
+  hasSim Boolean @default(false)
+
+  hasMemoryCard Boolean @default(false)
+
+  deviceTurnsOn Boolean?
+
+  hasWaterDamage Boolean?
+
+  //---------------------------------------------------
+  // RECEPCIÓN
+  //---------------------------------------------------
+
+  problem String
+
+  observations String?
+
+  estimatedDelivery DateTime?
+
+  //---------------------------------------------------
+  // DIAGNÓSTICO
+  //---------------------------------------------------
+
+  diagnostic String?
+
+  estimatedCost Decimal?
+
+  laborCost Decimal @default(0.00)
+
+  totalAmount Decimal @default(0.00)
+
+  //---------------------------------------------------
+  // GARANTÍA
+  //---------------------------------------------------
+
+  warrantyDays Int?
+
+  warrantyUntil DateTime?
+
+  //---------------------------------------------------
+  // ESTADO
+  //---------------------------------------------------
+
+  status ServiceStatus @default(RECEIVED)
+
+  deliveredAt DateTime?
+
+  //---------------------------------------------------
+  // RELACIONES
+  //---------------------------------------------------
 
   items ServiceItem[]
-  logs  ServiceLog[]
+
+  logs ServiceLog[]
+
+  photos ServicePhoto[]
+
+  sale Sale?
+
+  //---------------------------------------------------
 
   createdAt DateTime @default(now())
+
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, ticketNumber])
-  @@index([businessId])
+
+@@index([businessId])
+
+@@index([status])
+
+@@index([customerId])
+
+@@index([receivedById])
+
+@@index([technicianId])
+
+@@index([deliveredById])
+
+@@index([createdAt])
+}
+
+model ServicePhoto {
+  id String @id @default(cuid())
+
+  //---------------------------------------------------
+  // RELACIÓN
+  //---------------------------------------------------
+
+  serviceOrderId String
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+
+  //---------------------------------------------------
+  // INFORMACIÓN DE LA FOTO
+  //---------------------------------------------------
+
+  imageUrl String
+
+  type ServicePhotoType @default(RECEPTION)
+
+  description String?
+
+  //---------------------------------------------------
+  // AUDITORÍA
+  //---------------------------------------------------
+
+  uploadedById String
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  //---------------------------------------------------
+
+  @@index([serviceOrderId])
+
+  @@index([type])
+
+  @@index([createdAt])
 }
 
 model ServiceItem {
-  id             String       @id @default(cuid())
+  id String @id @default(cuid())
+
+  //---------------------------------------------------
+  // RELACIONES
+  //---------------------------------------------------
+
   serviceOrderId String
   serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
-  productId      String
-  product        Product      @relation(fields: [productId], references: [id])
-  quantity       Int          @default(1)
-  priceUnit      Decimal
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  //---------------------------------------------------
+  // INFORMACIÓN DEL REPUESTO
+  //---------------------------------------------------
+
+  quantity Int @default(1)
+
+  priceUnit Decimal
+
+  lineTotal Decimal
+
+  note String?
+
+  //---------------------------------------------------
+
+  createdAt DateTime @default(now())
+
+  @@index([serviceOrderId])
+
+  @@index([productId])
 }
 
 model ServiceLog {
-  id             String       @id @default(cuid())
+  id String @id @default(cuid())
+
+  //---------------------------------------------------
+  // RELACIONES
+  //---------------------------------------------------
+
   serviceOrderId String
   serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
-  statusFrom     String
-  statusTo       String
-  note           String?
-  userId         String
-  user           User         @relation(fields: [userId], references: [id])
-  createdAt      DateTime     @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  //---------------------------------------------------
+  // EVENTO
+  //---------------------------------------------------
+
+  statusFrom String
+
+  statusTo String
+
+  action String
+
+  note String?
+
+  //---------------------------------------------------
+
+  createdAt DateTime @default(now())
+
+  @@index([serviceOrderId])
+
+  @@index([userId])
+
+  @@index([createdAt])
 }
 
 model InventoryMovement {

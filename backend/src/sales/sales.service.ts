@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service";
-import { Prisma, PaymentMethod, NcfType } from "@prisma/client";
+import { Prisma, PaymentMethod, ServiceStatus, NcfType } from "@prisma/client";
 import { CreateSaleDto } from "./dto/create-sale.dto";
 import { randomUUID } from "crypto";
 
@@ -20,6 +20,7 @@ const userSelect = {
 interface CreateSaleInput extends CreateSaleDto {
     initialPayment?: number;
     customTotal?: number;
+    serviceOrderId?: string;
 }
 type DateRange = "TODAY" | "WEEK" | "MONTH" | "ALL";
 @Injectable()
@@ -67,6 +68,42 @@ export class SalesService {
             let subtotal = 0, costTotal = 0;
             const settings = await tx.businessSettings.findFirst({ where: { businessId } });
             const taxRate = settings?.taxRate ?? 18;
+
+            // ==========================================
+            // VALIDAR ORDEN DE REPARACIÓN
+            // ==========================================
+
+            if (dto.serviceOrderId) {
+
+                const serviceOrder = await tx.serviceOrder.findFirst({
+                    where: {
+                        id: dto.serviceOrderId,
+                        businessId,
+                    },
+                    include: {
+                        sale: true,
+                    },
+                });
+
+                if (!serviceOrder) {
+                    throw new NotFoundException(
+                        "Orden de reparación no encontrada."
+                    );
+                }
+
+                if (serviceOrder.sale) {
+                    throw new BadRequestException(
+                        "Esta reparación ya fue facturada."
+                    );
+                }
+
+                if (serviceOrder.status !== ServiceStatus.REPAIRED) {
+                    throw new BadRequestException(
+                        "Solo las órdenes reparadas pueden ser facturadas."
+                    );
+                }
+            }
+
 
             for (const item of dto.items) {
                 const product = await tx.product.findUnique({ where: { id: item.productId, businessId } });
@@ -142,14 +179,21 @@ export class SalesService {
                     idempotencyKey,
                     ncf,
                     ncfType: dto.ncfType ?? null,
+
                     subtotal: round(customTotal / (1 + taxRate / 100)),
                     tax: round(customTotal - (customTotal / (1 + taxRate / 100))),
                     total: customTotal,
                     discount: round(originalTotal - customTotal),
+
                     paymentMethod: dto.paymentMethod as PaymentMethod,
+
                     cashSessionId: session.id,
                     createdById: userId,
                     businessId,
+
+                    // 👇 ESTA ES LA RELACIÓN
+                    serviceOrderId: dto.serviceOrderId ?? null,
+
                     items: {
                         create: dto.items.map(i => ({
                             productId: i.productId,
@@ -159,7 +203,7 @@ export class SalesService {
                         }))
                     }
                 },
-                // 🔥 AÑADE ESTO PARA QUE DEVUELVA EL NOMBRE DEL CAJERO
+
                 include: {
                     createdBy: {
                         select: {
@@ -170,6 +214,19 @@ export class SalesService {
                     }
                 }
             });
+
+            if (dto.serviceOrderId) {
+                await tx.serviceLog.create({
+                    data: {
+                        serviceOrderId: dto.serviceOrderId,
+                        statusFrom: ServiceStatus.REPAIRED,
+                        statusTo: ServiceStatus.REPAIRED,
+                        note: `Reparación facturada. Factura ${sale.invoiceNumber}`,
+                        userId,
+                        action: "INVOICE",
+                    },
+                });
+            }
 
             if (dto.paymentMethod === "CREDIT" && dto.customerId) {
                 let creditAccount = await tx.creditAccount.upsert({ where: { customerId: dto.customerId }, update: {}, create: { customerId: dto.customerId, businessId } });

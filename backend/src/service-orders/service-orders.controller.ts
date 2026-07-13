@@ -25,8 +25,15 @@ export class ServiceOrdersController {
   constructor(private readonly serviceOrdersService: ServiceOrdersService) { }
 
   @Post()
-  async create(@Body() dto: CreateServiceOrderDto, @Req() req: any) {
-    return this.serviceOrdersService.create(dto, req.user.businessId);
+  async create(
+    @Body() dto: CreateServiceOrderDto,
+    @Req() req: any,
+  ) {
+    return this.serviceOrdersService.create(
+      dto,
+      req.user.businessId,
+      req.user.id,
+    );
   }
 
   @Get()
@@ -119,7 +126,8 @@ export class ServiceOrdersController {
     return this.serviceOrdersService.removeItem(
       id,
       itemId,
-      req.user.businessId
+      req.user.businessId,
+      req.user.id
     );
   }
 

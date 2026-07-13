@@ -24,16 +24,43 @@ export class ServiceOrdersService {
     ) { }
 
     // ==========================================
+    // FLUJO PERMITIDO DE LOS ESTADOS
+    // ==========================================
+
+    private readonly allowedTransitions: Record<ServiceStatus, ServiceStatus[]> = {
+        RECEIVED: [
+            ServiceStatus.DIAGNOSING,
+            ServiceStatus.CANCELLED,
+        ],
+
+        DIAGNOSING: [
+            ServiceStatus.WAITING_PARTS,
+            ServiceStatus.REPAIRED,
+            ServiceStatus.CANCELLED,
+        ],
+
+        WAITING_PARTS: [
+            ServiceStatus.DIAGNOSING,
+            ServiceStatus.REPAIRED,
+            ServiceStatus.CANCELLED,
+        ],
+
+        REPAIRED: [
+            ServiceStatus.DELIVERED,
+        ],
+
+        DELIVERED: [],
+
+        CANCELLED: [],
+    };
+
+    // ==========================================
     // GENERAR TICKET
     // ==========================================
 
     private async generateTicket() {
         const total = await this.prisma.serviceOrder.count();
-
-
         return `SRV-${String(total + 1).padStart(6, "0")}`;
-
-
     }
 
     // ==========================================
@@ -43,92 +70,124 @@ export class ServiceOrdersService {
     async create(
         dto: CreateServiceOrderDto,
         businessId: string,
+        userId: string,
     ) {
         const customer = await this.prisma.customer.findUnique({
-            where: {
-                id: dto.customerId,
-            },
+            where: { id: dto.customerId },
         });
 
-        console.log(customer);
-
-
         if (!customer) {
-            throw new NotFoundException(
-                "Cliente no encontrado",
-            );
+            throw new NotFoundException("Cliente no encontrado");
         }
 
         if (dto.technicianId) {
-            const technician =
-                await this.prisma.user.findFirst({
-                    where: {
-                        id: dto.technicianId,
-                        businessId,
-                        active: true,
-                    },
-                });
+            const technician = await this.prisma.user.findFirst({
+                where: {
+                    id: dto.technicianId,
+                    businessId,
+                    active: true,
+                },
+            });
 
             if (!technician) {
-                throw new NotFoundException(
-                    "Técnico no encontrado",
-                );
+                throw new NotFoundException("Técnico no encontrado");
             }
         }
 
-        const ticketNumber =
-            await this.generateTicket();
+        const ticketNumber = await this.generateTicket();
 
         return this.prisma.$transaction(
             async (tx) => {
-                const order =
-                    await tx.serviceOrder.create({
-                        data: {
-                            ticketNumber,
-                            businessId,
-                            customerId: dto.customerId,
-                            technicianId: dto.technicianId,
-                            deviceBrand: dto.deviceBrand,
-                            deviceModel: dto.deviceModel,
-                            serialOrImei: dto.serialOrImei,
-                            problem: dto.problem,
-                            status: ServiceStatus.RECEIVED,
+                const order = await tx.serviceOrder.create({
+                    data: {
+                        //-----------------------------------------
+                        // IDENTIFICACIÓN
+                        //-----------------------------------------
 
+                        ticketNumber,
+                        businessId,
 
-                            laborCost: 0,
-                            totalAmount: 0,
-                        },
-                    });
+                        //-----------------------------------------
+                        // RELACIONES
+                        //-----------------------------------------
+
+                        customerId: dto.customerId,
+
+                        technicianId: dto.technicianId,
+
+                        receivedById: userId,
+
+                        //-----------------------------------------
+                        // INFORMACIÓN DEL EQUIPO
+                        //-----------------------------------------
+
+                        deviceType: dto.deviceType,
+
+                        deviceBrand: dto.deviceBrand,
+
+                        deviceModel: dto.deviceModel,
+
+                        serialOrImei: dto.serialOrImei,
+
+                        color: dto.color,
+
+                        password: dto.password,
+
+                        accessories: dto.accessories,
+
+                        cosmeticCondition: dto.cosmeticCondition,
+
+                        batteryLevel: dto.batteryLevel,
+
+                        hasSim: dto.hasSim ?? false,
+
+                        hasMemoryCard: dto.hasMemoryCard ?? false,
+
+                        deviceTurnsOn: dto.deviceTurnsOn,
+
+                        hasWaterDamage: dto.hasWaterDamage,
+
+                        //-----------------------------------------
+                        // RECEPCIÓN
+                        //-----------------------------------------
+
+                        problem: dto.problem,
+
+                        observations: dto.observations,
+
+                        estimatedDelivery: dto.estimatedDelivery
+                            ? new Date(dto.estimatedDelivery)
+                            : undefined,
+
+                        //-----------------------------------------
+                        // ESTADO INICIAL
+                        //-----------------------------------------
+
+                        status: ServiceStatus.RECEIVED,
+
+                        laborCost: new Prisma.Decimal(0),
+
+                        totalAmount: new Prisma.Decimal(0),
+                    },
+                });
 
                 await tx.serviceLog.create({
                     data: {
-                        serviceOrderId:
-                            order.id,
-
-                        statusFrom:
-                            ServiceStatus.RECEIVED,
-
-                        statusTo:
-                            ServiceStatus.RECEIVED,
-
-                        note:
-                            "Orden creada",
-
-                        userId:
-                            dto.technicianId ??
-                            "SYSTEM",
+                        serviceOrderId: order.id,
+                        statusFrom: ServiceStatus.RECEIVED,
+                        statusTo: ServiceStatus.RECEIVED,
+                        note: "Orden creada",
+                        userId: dto.technicianId ?? "SYSTEM",
+                        action: "CREATE",
                     },
                 });
 
                 return order;
             },
             {
-                isolationLevel:
-                    Prisma.TransactionIsolationLevel.Serializable,
+                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
             },
         );
-
-
     }
 
     // ==========================================
@@ -137,68 +196,41 @@ export class ServiceOrdersService {
 
     async findAll(businessId: string) {
         return this.prisma.serviceOrder.findMany({
-            where: {
-                businessId,
-            },
-
-
+            where: { businessId },
             include: {
                 customer: true,
                 technician: true,
             },
-
             orderBy: {
                 createdAt: "desc",
             },
         });
-
-
     }
 
     // ==========================================
     // DETALLE
     // ==========================================
 
-    async findOne(
-        id: string,
-        businessId: string,
-    ) {
-        const order =
-            await this.prisma.serviceOrder.findFirst({
-                where: {
-                    id,
-                    businessId,
+    async findOne(id: string, businessId: string) {
+        const order = await this.prisma.serviceOrder.findFirst({
+            where: { id, businessId },
+            include: {
+                customer: true,
+                technician: true,
+                items: {
+                    include: { product: true },
                 },
-
-
-                include: {
-                    customer: true,
-
-                    technician: true,
-
-                    items: {
-                        include: {
-                            product: true,
-                        },
-                    },
-
-                    logs: {
-                        orderBy: {
-                            createdAt: "desc",
-                        },
-                    },
+                logs: {
+                    orderBy: { createdAt: "desc" },
                 },
-            });
+            },
+        });
 
         if (!order) {
-            throw new NotFoundException(
-                "Orden no encontrada",
-            );
+            throw new NotFoundException("Orden no encontrada");
         }
 
         return order;
-
-
     }
 
     // ==========================================
@@ -210,40 +242,49 @@ export class ServiceOrdersService {
         dto: AssignTechnicianDto,
         businessId: string,
     ) {
-        const order =
-            await this.findOne(
-                serviceOrderId,
-                businessId,
-            );
+        const order = await this.findOne(serviceOrderId, businessId);
 
-
-        const technician =
-            await this.prisma.user.findFirst({
-                where: {
-                    id: dto.technicianId,
-                    businessId,
-                    active: true,
-                },
-            });
-
-        if (!technician) {
-            throw new NotFoundException(
-                "Técnico no encontrado",
+        if (
+            order.status === ServiceStatus.DELIVERED ||
+            order.status === ServiceStatus.CANCELLED
+        ) {
+            throw new BadRequestException(
+                "No se puede cambiar el técnico de una orden finalizada."
             );
         }
 
-        return this.prisma.serviceOrder.update({
+        const technician = await this.prisma.user.findFirst({
             where: {
-                id: order.id,
+                id: dto.technicianId,
+                businessId,
+                active: true,
             },
-
-            data: {
-                technicianId:
-                    dto.technicianId,
-            },
+            select: { id: true, name: true },
         });
 
+        if (!technician) {
+            throw new NotFoundException("Técnico no encontrado");
+        }
 
+        return this.prisma.$transaction(async (tx) => {
+            const updatedOrder = await tx.serviceOrder.update({
+                where: { id: order.id },
+                data: { technicianId: dto.technicianId },
+            });
+
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: order.id,
+                    statusFrom: order.status,
+                    statusTo: order.status,
+                    note: `Técnico asignado: ${technician.name}`,
+                    userId: dto.technicianId,
+                    action: "ASSIGN_TECHNICIAN",
+                },
+            });
+
+            return updatedOrder;
+        });
     }
 
     // ==========================================
@@ -257,34 +298,68 @@ export class ServiceOrdersService {
         userId: string,
     ) {
         const order = await this.findOne(serviceOrderId, businessId);
-        if (order.status === 'DELIVERED') {
-            throw new BadRequestException("Esta orden está cerrada y no permite cambios de estado.");
+
+        if (
+            order.status === ServiceStatus.DELIVERED ||
+            order.status === ServiceStatus.CANCELLED
+        ) {
+            throw new BadRequestException(
+                "No se pueden modificar órdenes finalizadas."
+            );
+        }
+
+        // Validar transición permitida
+        const allowed = this.allowedTransitions[order.status as ServiceStatus];
+        if (!allowed.includes(dto.status)) {
+            throw new BadRequestException(
+                `No está permitido cambiar el estado de ${order.status} a ${dto.status}`
+            );
+        }
+
+        // Validaciones específicas para REPAIRED
+        if (dto.status === ServiceStatus.REPAIRED) {
+            if (!order.technicianId) {
+                throw new BadRequestException(
+                    "Debe asignar un técnico antes de finalizar la reparación."
+                );
+            }
+
+            if (
+                !order.diagnostic ||
+                order.diagnostic.trim() === ""
+            ) {
+                throw new BadRequestException(
+                    "Debe registrar el diagnóstico antes de finalizar la reparación."
+                );
+            }
+
+            if (Number(order.laborCost) <= 0) {
+                throw new BadRequestException(
+                    "Debe definir el costo de mano de obra."
+                );
+            }
         }
 
         return this.prisma.$transaction(async (tx) => {
+            const automaticNote = dto.note ?? `Estado cambiado de ${order.status} a ${dto.status}`;
+
             await tx.serviceOrder.update({
                 where: { id: order.id },
                 data: { status: dto.status },
             });
 
-            // 2. Registrar el log con validación de seguridad para la nota
             await tx.serviceLog.create({
                 data: {
                     serviceOrderId: order.id,
                     statusFrom: order.status,
                     statusTo: dto.status,
-                    note: dto.note || "Sin nota", // Seguridad: nunca enviar vacío/null
-                    userId: userId || "SYSTEM",  // Seguridad: nunca enviar null
+                    note: automaticNote,
+                    userId: userId || "SYSTEM",
+                    action: "STATUS_CHANGE",
                 },
             });
 
             return { message: "Estado actualizado" };
-        });
-    }
-
-    private async createLog(tx: Prisma.TransactionClient, orderId: string, statusFrom: string, statusTo: string, note: string, userId: string) {
-        await tx.serviceLog.create({
-            data: { serviceOrderId: orderId, statusFrom, statusTo, note, userId: userId || "SYSTEM" }
         });
     }
 
@@ -293,7 +368,12 @@ export class ServiceOrdersService {
     // ==========================================
     async update(id: string, dto: UpdateServiceOrderDto, businessId: string, userId: string) {
         return await this.prisma.$transaction(async (tx) => {
-            const order = await tx.serviceOrder.findUnique({ where: { id, businessId } });
+            const order = await tx.serviceOrder.findFirst({
+                where: {
+                    id,
+                    businessId,
+                },
+            });
             if (!order) throw new NotFoundException("Orden no encontrada.");
             if (order.status === 'DELIVERED') throw new BadRequestException("No puedes modificar una orden entregada.");
 
@@ -307,8 +387,16 @@ export class ServiceOrdersService {
                 }
             });
 
-            // Registrar cambios en el log
-            await this.createLog(tx, id, order.status, order.status, "Información de la orden actualizada", userId);
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: id,
+                    statusFrom: order.status,
+                    statusTo: order.status,
+                    note: "Información de la orden actualizada",
+                    userId: userId || "SYSTEM",
+                    action: "UPDATE",
+                }
+            });
 
             return updatedOrder;
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
@@ -320,29 +408,41 @@ export class ServiceOrdersService {
 
     async addItem(serviceOrderId: string, dto: AddServiceItemDto, businessId: string, userId: string) {
         return await this.prisma.$transaction(async (tx) => {
-            // 1. Validar orden (asegurando que pertenece al negocio) y obtener el ticketNumber para el log
             const order = await this.findOne(serviceOrderId, businessId);
 
-            // 2. Validar producto
+            if (
+                order.status === ServiceStatus.DELIVERED ||
+                order.status === ServiceStatus.CANCELLED
+            ) {
+                throw new BadRequestException(
+                    "No se pueden agregar repuestos a una orden finalizada."
+                );
+            }
+
             const product = await tx.product.findFirst({
-                where: { id: dto.productId, businessId, active: true }
+                where: {
+                    id: dto.productId,
+                    businessId,
+                    active: true
+                }
             });
 
             if (!product || product.stock < dto.quantity) {
                 throw new BadRequestException("Producto no disponible o stock insuficiente");
             }
 
-            // 3. Crear ítem de servicio
+            const itemLineTotal = Number(product.salePrice) * dto.quantity;
+
             await tx.serviceItem.create({
                 data: {
                     serviceOrderId,
                     productId: product.id,
                     quantity: dto.quantity,
-                    priceUnit: product.salePrice, // Precio al momento del registro
+                    priceUnit: product.salePrice,
+                    lineTotal: itemLineTotal,
                 },
             });
 
-            // 4. Descontar inventario y registrar movimiento
             await tx.product.update({
                 where: { id: product.id },
                 data: { stock: { decrement: dto.quantity } }
@@ -359,7 +459,18 @@ export class ServiceOrdersService {
                 }
             });
 
-            // 5. Recalcular total de la orden
+            // Registro en historial
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: order.id,
+                    statusFrom: order.status,
+                    statusTo: order.status,
+                    note: `Se agregó ${dto.quantity} x ${product.name}`,
+                    userId: userId || "SYSTEM",
+                    action: "ADD_ITEM",
+                },
+            });
+
             const items = await tx.serviceItem.findMany({ where: { serviceOrderId } });
             const partsTotal = items.reduce((acc, i) => acc + (Number(i.priceUnit) * i.quantity), 0);
             const total = partsTotal + Number(order.laborCost);
@@ -371,7 +482,86 @@ export class ServiceOrdersService {
         });
     }
 
-    // --- Actualizar Mano de Obra y Recalcular ---
+    // ==========================================
+    // ELIMINAR REPUESTO
+    // ==========================================
+
+    async removeItem(serviceOrderId: string, itemId: string, businessId: string, userId: string) {
+        return await this.prisma.$transaction(async (tx) => {
+            const item = await tx.serviceItem.findFirst({
+                where: { id: itemId, serviceOrderId },
+                include: { product: true }
+            });
+
+            if (!item) throw new NotFoundException("Ítem no encontrado");
+
+            const order = await tx.serviceOrder.findUnique({
+                where: { id: serviceOrderId },
+                select: {
+                    status: true,
+                    laborCost: true
+                }
+            });
+
+            if (!order) throw new NotFoundException("Orden no encontrada");
+
+            if (
+                order.status === ServiceStatus.DELIVERED ||
+                order.status === ServiceStatus.CANCELLED
+            ) {
+                throw new BadRequestException(
+                    "No se pueden eliminar repuestos de una orden finalizada."
+                );
+            }
+
+            // Devolver stock
+            await tx.product.update({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } }
+            });
+
+            // Registrar movimiento de devolución
+            await tx.inventoryMovement.create({
+                data: {
+                    businessId,
+                    productId: item.productId,
+                    type: 'RETURN',
+                    quantity: item.quantity,
+                    note: `Reversión de orden: ${serviceOrderId}`
+                }
+            });
+
+            // Eliminar ítem
+            await tx.serviceItem.delete({ where: { id: itemId } });
+
+            // Registrar en historial
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: serviceOrderId,
+                    statusFrom: order.status,
+                    statusTo: order.status,
+                    note: `Se eliminó ${item.quantity} x ${item.product.name}`,
+                    userId: userId || "SYSTEM",
+                    action: "REMOVE_ITEM",
+                },
+            });
+
+            // Recalcular total
+            const remainingItems = await tx.serviceItem.findMany({ where: { serviceOrderId } });
+            const total = remainingItems.reduce((acc, i) => acc + (Number(i.priceUnit) * i.quantity), 0)
+                + Number(order.laborCost);
+
+            return await tx.serviceOrder.update({
+                where: { id: serviceOrderId },
+                data: { totalAmount: total }
+            });
+        });
+    }
+
+    // ==========================================
+    // ACTUALIZAR MANO DE OBRA
+    // ==========================================
+
     async updateLaborCost(id: string, businessId: string, laborCost: number, userId: string) {
         return await this.prisma.$transaction(async (tx) => {
             const order = await this.findOne(id, businessId);
@@ -384,99 +574,86 @@ export class ServiceOrdersService {
                 data: { laborCost, totalAmount: partsTotal + laborCost }
             });
 
-            await this.createLog(tx, id, order.status, order.status, `Mano de obra actualizada a: ${laborCost}`, userId);
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: id,
+                    statusFrom: order.status,
+                    statusTo: order.status,
+                    note: `Mano de obra actualizada a: ${laborCost}`,
+                    userId: userId || "SYSTEM",
+                    action: "UPDATE_LABOR_COST",
+                }
+            });
 
             return updatedOrder;
         });
     }
 
-    async removeItem(serviceOrderId: string, itemId: string, businessId: string) {
-        return await this.prisma.$transaction(async (tx) => {
-            const item = await tx.serviceItem.findFirst({ where: { id: itemId, serviceOrderId } });
-            if (!item) throw new NotFoundException("Ítem no encontrado");
+    // ==========================================
+    // COMPLETAR / ENTREGAR ORDEN
+    // ==========================================
 
-            // 1. Regresar stock
-            await tx.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } }
-            });
+    async completeServiceOrder(
+        orderId: string,
+        userId: string,
+        businessId: string,
+    ) {
+        return await this.prisma.$transaction(
+            async (tx) => {
+                const order = await tx.serviceOrder.findFirst({
+                    where: {
+                        id: orderId,
+                        businessId,
+                    },
+                    include: {
+                        sale: true,
+                    },
+                });
 
-            // AGREGADO: Registrar el movimiento de devolución
-            await tx.inventoryMovement.create({
-                data: {
-                    businessId,
-                    productId: item.productId,
-                    type: 'RETURN',
-                    quantity: item.quantity,
-                    note: `Reversión de orden: ${serviceOrderId}`
+                if (!order) {
+                    throw new NotFoundException(
+                        "Orden no encontrada."
+                    );
                 }
-            });
 
-            // 2. Eliminar ítem
-            await tx.serviceItem.delete({ where: { id: itemId } });
-
-            // 3. Recalcular total
-            const remainingItems = await tx.serviceItem.findMany({ where: { serviceOrderId } });
-            const order = await tx.serviceOrder.findUnique({ where: { id: serviceOrderId } });
-
-            // Usamos Number() para asegurar operaciones matemáticas correctas con Decimal
-            const total = remainingItems.reduce((acc, i) => acc + (Number(i.priceUnit) * i.quantity), 0) + Number(order!.laborCost);
-
-            return await tx.serviceOrder.update({
-                where: { id: serviceOrderId },
-                data: { totalAmount: total }
-            });
-        });
-    }
-
-    async completeServiceOrder(orderId: string, userId: string, businessId: string) {
-        return await this.prisma.$transaction(async (tx) => {
-            // 1. Obtener orden con seguridad
-            const order = await tx.serviceOrder.findUnique({
-                where: { id: orderId, businessId },
-            });
-
-            if (!order) throw new NotFoundException("Orden no encontrada.");
-
-            // 2. Validación de estado: ¡Evita el doble cobro!
-            if (order.status === 'DELIVERED') {
-                throw new BadRequestException("Esta orden ya fue entregada y cobrada.");
-            }
-
-            // 3. Validar Caja Abierta
-            const session = await tx.cashSession.findFirst({
-                where: { status: "OPEN", businessId }
-            });
-            if (!session) {
-                throw new BadRequestException("Debe haber una caja abierta para entregar la orden.");
-            }
-
-            // 4. Registrar la Venta (Ingreso en Caja)
-            // Nota: No descontamos stock aquí, porque se hizo en addItem()
-            await tx.sale.create({
-                data: {
-                    invoiceNumber: `REP-${order.ticketNumber}`,
-                    idempotencyKey: `REP-${order.id}`, // Evita duplicados
-                    total: order.totalAmount,
-                    subtotal: order.totalAmount,
-                    discount: 0,
-                    tax: 0,
-                    paymentMethod: 'CASH',
-                    cashSessionId: session.id,
-                    businessId,
-                    createdById: userId,
+                if (order.status !== ServiceStatus.REPAIRED) {
+                    throw new BadRequestException(
+                        "La orden debe estar reparada antes de ser entregada."
+                    );
                 }
-            });
 
-            // 5. Finalizar Orden
-            return await tx.serviceOrder.update({
-                where: { id: orderId },
-                data: {
-                    status: 'DELIVERED',
-                    // Opcional: Guardar fecha de entrega para reportes de KPIs
-                    deliveredAt: new Date()
+                // Debe estar facturada antes de entregarse
+                if (!order.sale) {
+                    throw new BadRequestException(
+                        "Debe facturar la reparación antes de entregar el equipo."
+                    );
                 }
-            });
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+                await tx.serviceLog.create({
+                    data: {
+                        serviceOrderId: order.id,
+                        statusFrom: order.status,
+                        statusTo: ServiceStatus.DELIVERED,
+                        note: `Equipo entregado al cliente. Factura: ${order.sale.invoiceNumber}`,
+                        userId,
+                        action: "COMPLETE_ORDER",
+                    },
+                });
+
+                return await tx.serviceOrder.update({
+                    where: {
+                        id: orderId,
+                    },
+                    data: {
+                        status: ServiceStatus.DELIVERED,
+                        deliveredAt: new Date(),
+                        deliveredById: userId,
+                    },
+                });
+            },
+            {
+                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            },
+        );
     }
 }
