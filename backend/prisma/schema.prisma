@@ -737,9 +737,11 @@ model ServiceItem {
 
   priceUnit Decimal
 
-  lineTotal Decimal
+  lineTotal Decimal @default(0)
 
   note String?
+
+  createdAt DateTime @default(now())
 
   //---------------------------------------------------
 
@@ -767,13 +769,13 @@ model ServiceLog {
   // EVENTO
   //---------------------------------------------------
 
-  statusFrom String
+  statusFrom ServiceStatus
 
-  statusTo String
+statusTo ServiceStatus
 
-  action String
+action String @default("SYSTEM")
 
-  note String?
+note String?
 
   //---------------------------------------------------
 
