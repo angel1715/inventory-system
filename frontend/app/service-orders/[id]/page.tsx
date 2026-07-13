@@ -433,7 +433,7 @@ export default function ServiceOrderDetailPage() {
             <div className="flex gap-4">
               <button
                 onClick={() => setIsItemModalOpen(false)}
-                className="flex-1 py-4 rounded-2xl border border-zinc-200 font-medium"
+                className="flex-1 py-4 bg-red-500 rounded-2xl border border-zinc-200 font-medium"
               >
                 Cancelar
               </button>
@@ -473,13 +473,13 @@ export default function ServiceOrderDetailPage() {
             <div className="flex gap-4">
               <button
                 onClick={() => setIsStatusModalOpen(false)}
-                className="flex-1 py-4 rounded-2xl border border-zinc-200 font-medium"
+                className="flex-1 py-4 bg-red-500 rounded-2xl border border-zinc-200 font-medium"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleUpdateStatus}
-                className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-semibold"
+                className="flex-1 py-4 bg-zinc-900 text-white rounded-2xl font-semibold"
               >
                 Confirmar
               </button>
