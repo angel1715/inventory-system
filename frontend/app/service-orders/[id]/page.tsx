@@ -141,16 +141,28 @@ export default function ServiceOrderDetailPage() {
       toast.error("Marca y modelo son obligatorios");
       return;
     }
-    try {
-      console.log(infoForm);
-      await updateServiceOrder(id, infoForm);
-      toast.success("Información actualizada");
-      setIsEditingInfo(false);
-      loadOrder();
-    } catch (err: any) {
-      console.log(err);
 
-      toast.error(err.message);
+    try {
+      setLoading(true);
+
+      await updateServiceOrder(id, infoForm);
+
+      // Esperamos a que el backend nos devuelva la información actualizada.
+      await loadOrder();
+
+      setIsEditingInfo(false);
+
+      toast.success("Diagnóstico guardado correctamente");
+    } catch (err: any) {
+      console.error(err);
+
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Error al actualizar la orden",
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
