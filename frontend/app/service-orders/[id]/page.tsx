@@ -252,6 +252,80 @@ export default function ServiceOrderDetailPage() {
               </p>
             </div>
 
+            {/* Diagnóstico y Solución */}
+            <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm p-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-xl text-zinc-900">
+                  Diagnóstico y Reparación
+                </h3>
+                <button
+                  onClick={() => setIsEditingInfo(!isEditingInfo)}
+                  className="text-blue-600 text-sm font-medium hover:underline"
+                >
+                  {isEditingInfo ? "Cancelar" : "Editar Diagnóstico"}
+                </button>
+              </div>
+
+              {isEditingInfo ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm text-zinc-500 block mb-1">
+                      Diagnóstico
+                    </label>
+                    <textarea
+                      value={infoForm.diagnostic}
+                      onChange={(e) =>
+                        setInfoForm({ ...infoForm, diagnostic: e.target.value })
+                      }
+                      placeholder="Escribe el diagnóstico técnico..."
+                      className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-3 min-h-[100px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-zinc-500 block mb-1">
+                      Solución Aplicada
+                    </label>
+                    <textarea
+                      value={infoForm.repairSolution}
+                      onChange={(e) =>
+                        setInfoForm({
+                          ...infoForm,
+                          repairSolution: e.target.value,
+                        })
+                      }
+                      placeholder="Describe la solución..."
+                      className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-3 min-h-[100px]"
+                    />
+                  </div>
+                  <button
+                    onClick={handleUpdateInfo}
+                    className="w-full py-3 bg-zinc-900 text-white rounded-2xl font-semibold hover:bg-zinc-800 transition"
+                  >
+                    Guardar Diagnóstico
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-zinc-50 p-6 rounded-2xl">
+                    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                      Diagnóstico Registrado
+                    </p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">
+                      {order.diagnostic || "Sin diagnóstico registrado."}
+                    </p>
+                  </div>
+                  <div className="bg-zinc-50 p-6 rounded-2xl">
+                    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                      Solución Registrada
+                    </p>
+                    <p className="text-zinc-700 whitespace-pre-wrap">
+                      {order.repairSolution || "Sin solución registrada."}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Información del Equipo */}
             <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm">
               <div className="border-b border-zinc-100 p-6">
