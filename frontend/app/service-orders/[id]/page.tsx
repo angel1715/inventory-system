@@ -54,9 +54,12 @@ export default function ServiceOrderDetailPage() {
 
   async function loadOrder() {
     if (!id) return;
+
     setLoading(true);
+
     try {
       const data = await getServiceOrder(id);
+
       setOrder(data);
       setNewStatus(data.status);
 

@@ -38,16 +38,8 @@ const DEVICE_TYPES = [
 ];
 
 const ACCESSORIES = [
-  "Cargador",
-  "Cable USB",
-  "Caja",
-  "Funda",
-  "Protector",
-  "SIM",
-  "Memoria SD",
-  "Adaptador",
-  "Mouse",
-  "Teclado",
+  "Cargador", "Cable USB", "Caja", "Funda", "Protector",
+  "SIM", "Memoria SD", "Adaptador", "Mouse", "Teclado",
 ];
 
 export default function CreateServiceOrderPage() {
@@ -95,9 +87,7 @@ export default function CreateServiceOrderPage() {
   }, []);
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value, type } = e.target;
 
@@ -135,8 +125,7 @@ export default function CreateServiceOrderPage() {
         password: form.password.trim() || undefined,
         accessories: form.accessories.length > 0 ? form.accessories : undefined,
         cosmeticCondition: form.cosmeticCondition.trim() || undefined,
-        batteryLevel:
-          form.batteryLevel === "" ? undefined : Number(form.batteryLevel),
+        batteryLevel: form.batteryLevel === "" ? undefined : Number(form.batteryLevel),
         hasSim: form.hasSim,
         hasMemoryCard: form.hasMemoryCard,
         deviceTurnsOn: form.deviceTurnsOn,
@@ -187,9 +176,7 @@ export default function CreateServiceOrderPage() {
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="border-b border-zinc-100 p-6 flex items-center gap-3 bg-zinc-50">
               <User className="text-blue-600" />
-              <h2 className="font-semibold text-xl text-zinc-900">
-                Información del Cliente
-              </h2>
+              <h2 className="font-semibold text-xl text-zinc-900">Información del Cliente</h2>
             </div>
             <div className="p-6 grid md:grid-cols-2 gap-6">
               <div>
@@ -237,16 +224,12 @@ export default function CreateServiceOrderPage() {
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="border-b border-zinc-100 p-6 flex items-center gap-3 bg-zinc-50">
               <Smartphone className="text-green-600" />
-              <h2 className="font-semibold text-xl text-zinc-900">
-                Información del Equipo
-              </h2>
+              <h2 className="font-semibold text-xl text-zinc-900">Información del Equipo</h2>
             </div>
             <div className="p-6 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* ... todos los inputs con el nuevo estilo ... */}
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  Tipo de dispositivo
-                </label>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">Tipo de dispositivo</label>
                 <select
                   name="deviceType"
                   value={form.deviceType}
@@ -290,9 +273,7 @@ export default function CreateServiceOrderPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  IMEI / Serial
-                </label>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">IMEI / Serial</label>
                 <input
                   name="serialOrImei"
                   value={form.serialOrImei}
@@ -303,9 +284,7 @@ export default function CreateServiceOrderPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  Color
-                </label>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">Color</label>
                 <input
                   name="color"
                   value={form.color}
@@ -316,9 +295,7 @@ export default function CreateServiceOrderPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  Contraseña
-                </label>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">Contraseña</label>
                 <input
                   name="password"
                   value={form.password}
@@ -328,9 +305,7 @@ export default function CreateServiceOrderPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  Nivel batería (%)
-                </label>
+                <label className="block text-sm font-medium text-zinc-700 mb-2">Nivel batería (%)</label>
                 <input
                   type="number"
                   min={0}
@@ -348,9 +323,7 @@ export default function CreateServiceOrderPage() {
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="border-b border-zinc-100 p-6 flex items-center gap-3 bg-zinc-50">
               <Wrench className="text-orange-600" />
-              <h2 className="font-semibold text-xl text-zinc-900">
-                Estado de Recepción
-              </h2>
+              <h2 className="font-semibold text-xl text-zinc-900">Estado de Recepción</h2>
             </div>
             <div className="p-6 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
@@ -359,10 +332,7 @@ export default function CreateServiceOrderPage() {
                 { name: "deviceTurnsOn", label: "Enciende" },
                 { name: "hasWaterDamage", label: "Daño por humedad" },
               ].map((item) => (
-                <label
-                  key={item.name}
-                  className="flex items-center gap-3 cursor-pointer text-zinc-700"
-                >
+                <label key={item.name} className="flex items-center gap-3 cursor-pointer text-zinc-700">
                   <input
                     type="checkbox"
                     name={item.name}
@@ -379,9 +349,7 @@ export default function CreateServiceOrderPage() {
           {/* ACCESORIOS */}
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="border-b border-zinc-100 p-6 bg-zinc-50">
-              <h2 className="text-xl font-semibold text-zinc-900">
-                Accesorios Recibidos
-              </h2>
+              <h2 className="text-xl font-semibold text-zinc-900">Accesorios Recibidos</h2>
               <p className="text-sm text-zinc-500 mt-1">
                 Selecciona todo lo que entrega el cliente
               </p>
@@ -405,18 +373,13 @@ export default function CreateServiceOrderPage() {
 
           {/* ESTADO FÍSICO, PROBLEMA, OBSERVACIONES, ENTREGA */}
           {["cosmeticCondition", "problem", "observations"].map((field) => (
-            <div
-              key={field}
-              className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden"
-            >
+            <div key={field} className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
               <div className="border-b border-zinc-100 p-6 bg-zinc-50">
                 <h2 className="text-xl font-semibold text-zinc-900">
                   {field === "cosmeticCondition" && "Estado Físico"}
                   {field === "problem" && "Problema Reportado"}
                   {field === "observations" && "Observaciones"}
-                  {field === "problem" && (
-                    <span className="text-red-500">*</span>
-                  )}
+                  {field === "problem" && <span className="text-red-500">*</span>}
                 </h2>
               </div>
               <div className="p-6">
@@ -430,8 +393,8 @@ export default function CreateServiceOrderPage() {
                     field === "cosmeticCondition"
                       ? "Rayones, golpes, pantalla rota..."
                       : field === "problem"
-                        ? "Describe el problema reportado por el cliente..."
-                        : "Información adicional..."
+                      ? "Describe el problema reportado por el cliente..."
+                      : "Información adicional..."
                   }
                   className="w-full bg-white border border-zinc-200 rounded-2xl px-4 py-4 text-zinc-900 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100 min-h-[120px]"
                 />
@@ -442,9 +405,7 @@ export default function CreateServiceOrderPage() {
           {/* ENTREGA ESTIMADA */}
           <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="border-b border-zinc-100 p-6 bg-zinc-50">
-              <h2 className="text-xl font-semibold text-zinc-900">
-                Entrega Estimada
-              </h2>
+              <h2 className="text-xl font-semibold text-zinc-900">Entrega Estimada</h2>
             </div>
             <div className="p-6">
               <input
