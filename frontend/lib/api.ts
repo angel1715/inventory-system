@@ -426,6 +426,10 @@ export const updateServiceOrder = (orderId: string, data: {
   deviceModel?: string;
   serialOrImei?: string;
   problem?: string;
+  diagnostic?: string;
+  repairSolution?: string;
+  estimatedRepairTime?: string;
+  customerApproved?: boolean;
 }) =>
   request(`/service-orders/${orderId}`, {
     method: "PATCH",
