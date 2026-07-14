@@ -367,6 +367,7 @@ export class ServiceOrdersService {
     // ACTUALIZAR INFORMACIÓN DE LA ORDEN
     // ==========================================
     async update(id: string, dto: UpdateServiceOrderDto, businessId: string, userId: string) {
+        console.log(dto);
         return await this.prisma.$transaction(async (tx) => {
             const order = await tx.serviceOrder.findFirst({
                 where: {
