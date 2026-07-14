@@ -299,6 +299,13 @@ export class ServiceOrdersService {
     ) {
         const order = await this.findOne(serviceOrderId, businessId);
 
+        console.log("==============");
+        console.log("STATUS:", order.status);
+        console.log("DIAGNOSTIC:", order.diagnostic);
+        console.log("LABOR:", order.laborCost);
+        console.log("TECH:", order.technicianId);
+
+
         if (
             order.status === ServiceStatus.DELIVERED ||
             order.status === ServiceStatus.CANCELLED
@@ -329,7 +336,7 @@ export class ServiceOrdersService {
                 order.diagnostic.trim() === ""
             ) {
                 throw new BadRequestException(
-                    "Debe registrar el diagnóstico antes de finalizar la reparación."
+                    "PRUEBA_123456_DIAGNOSTICO"
                 );
             }
 
