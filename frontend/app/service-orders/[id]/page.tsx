@@ -142,6 +142,7 @@ export default function ServiceOrderDetailPage() {
       return;
     }
     try {
+      console.log(infoForm);
       await updateServiceOrder(id, infoForm);
       toast.success("Información actualizada");
       setIsEditingInfo(false);

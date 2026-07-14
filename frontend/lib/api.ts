@@ -13,6 +13,12 @@ export function getToken() {
 // CORE REQUEST
 // =========================
 async function request(endpoint: string, options: RequestInit = {}) {
+
+  console.log("================================");
+  console.log("ENDPOINT:", endpoint);
+  console.log("METHOD:", options.method);
+  console.log("BODY:", options.body);
+  console.log("================================");
   const isAuthEndpoint =
     endpoint.includes("/auth/login") ||
     endpoint.includes("/auth/register") ||
