@@ -147,8 +147,10 @@ export default function ServiceOrderDetailPage() {
       toast.success("Información actualizada");
       setIsEditingInfo(false);
       loadOrder();
-    } catch {
-      toast.error("Error al actualizar");
+    } catch (err: any) {
+      console.log(err);
+
+      toast.error(err.message);
     }
   };
 
