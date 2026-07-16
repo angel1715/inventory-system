@@ -110,7 +110,6 @@ export default function InvoiceServiceModal({
         }
       }
 
-
       await onConfirm({
         paymentMethod,
         received: paymentMethod === "CASH" ? receivedNumber : total,
@@ -125,7 +124,7 @@ export default function InvoiceServiceModal({
           err?.message ||
           "No se pudo generar la factura.",
       );
-    } 
+    }
   }
 
   if (!open) return null;
@@ -192,10 +191,8 @@ export default function InvoiceServiceModal({
             onChange={(e) => setNcfType(e.target.value)}
             className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black"
           >
-            <option value="FINAL_CONSUMER">Consumidor Final</option>
-            <option value="FISCAL">Crédito Fiscal</option>
-            <option value="GOVERNMENT">Gubernamental</option>
-            <option value="SPECIAL">Especial</option>
+            <option value="FINAL_CONSUMER">Consumidor Final (B02)</option>
+            <option value="FISCAL">Crédito Fiscal (B01)</option>
           </select>
         </div>
 
