@@ -442,6 +442,35 @@ export const updateServiceOrder = (orderId: string, data: {
 
 
 // ==========================================
+// FACTURAR REPARACIÓN
+// ==========================================
+
+export const invoiceServiceOrder = (
+  id: string,
+  data: {
+    paymentMethod: string;
+    received: number;
+    change: number;
+    initialPayment?: number;
+    ncfType?: string;
+  }
+) =>
+  request(`/service-orders/${id}/invoice`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+
+// ==========================================
+// ENTREGAR EQUIPO
+// ==========================================
+
+export const deliverServiceOrder = (id: string) =>
+  request(`/service-orders/${id}/delivered`, {
+    method: "PATCH",
+  });
+
+// ==========================================
 // ENDPOINTS PARA CONTROL DE SERIALES / IMEIS
 // ==========================================
 
@@ -484,10 +513,6 @@ export const createCheckoutSession = (priceId: string) =>
     body: JSON.stringify({ priceId }), // Serializamos el objeto
   });
 
-export const completeServiceOrder = (orderId: string) =>
-  request(`/service-orders/${orderId}/complete`, {
-    method: "PATCH",
-  });
 
 // =========================
 // AUTH (Recuperación de contraseña)

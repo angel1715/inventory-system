@@ -18,6 +18,7 @@ import { JwtAuthGuard } from "../auth/jwt.guard";
 import { UpdateLaborCostDto } from "./dto/update-labor-cost.dto";
 import { UpdateServiceOrderDto } from "./dto/update-service-order.dto";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
+import { InvoiceServiceOrderDto } from "./dto/invoice-service-order.dto";
 
 @Controller("service-orders")
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
@@ -131,12 +132,32 @@ export class ServiceOrdersController {
     );
   }
 
-  @Patch(":id/complete")
-  async completeServiceOrder(@Param("id") id: string, @Req() req: any) {
-    return this.serviceOrdersService.completeServiceOrder(
+
+  @Post(":id/invoice")
+  invoiceServiceOrder(
+    @Param("id") id: string,
+    @Req() req: any,
+    @Body() dto: InvoiceServiceOrderDto,
+  ) {
+    return this.serviceOrdersService.invoiceServiceOrder(
       id,
       req.user.id,
-      req.user.businessId
+      req.user.businessId,
+      dto,
+    );
+  }
+
+
+
+  @Patch(":id/delivered")
+  deliverDevice(
+    @Param("id") id: string,
+    @Req() req: any,
+  ) {
+    return this.serviceOrdersService.deliverDevice(
+      id,
+      req.user.id,
+      req.user.businessId,
     );
   }
 }

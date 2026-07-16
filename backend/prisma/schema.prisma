@@ -64,10 +64,9 @@ enum NcfType {
 enum ServiceStatus {
   RECEIVED
   DIAGNOSING
-  WAITING_PARTS
   REPAIRED
+  READY_FOR_PICKUP
   DELIVERED
-  CANCELLED
 }
 
 enum ReceivableStatus {
@@ -132,7 +131,7 @@ model Business {
   name      String
   slug      String   @unique
   phone     String?
-  email String @unique
+  email     String   @unique
   address   String?
   logoUrl   String?
   active    Boolean  @default(true)
@@ -187,10 +186,10 @@ model Subscription {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   // Campos para control de estado
-  accessType          String             @default("TRIAL")
-  currentPeriodEnd    DateTime
-  subscriptionStatus  SubscriptionStatus @default(ACTIVE) // Nuevo
-  
+  accessType         String             @default("TRIAL")
+  currentPeriodEnd   DateTime
+  subscriptionStatus SubscriptionStatus @default(ACTIVE) // Nuevo
+
   // Opcional para Stripe
   stripeCustomerId     String? @unique
   stripeSubscriptionId String? @unique
@@ -218,13 +217,13 @@ model ManualPaymentLog {
 }
 
 model User {
-  id               String   @id @default(cuid())
+  id               String  @id @default(cuid())
   name             String
-  email            String   @unique
-  stripeCustomerId String?  @unique
+  email            String  @unique
+  stripeCustomerId String? @unique
   password         String
-  role             Role     @default(OWNER)
-  active           Boolean  @default(true)
+  role             Role    @default(OWNER)
+  active           Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -508,7 +507,6 @@ model Sale {
   discount      Decimal
   total         Decimal
   paymentMethod PaymentMethod
-  
 
   cashSessionId String?
   cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
@@ -524,13 +522,13 @@ model Sale {
   accountsReceivable AccountsReceivable?
 
   //---------------------------------------------------
-// REPARACIONES
-//---------------------------------------------------
+  // REPARACIONES
+  //---------------------------------------------------
 
-serviceOrderId String? @unique
+  serviceOrderId String? @unique
 
-serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
-  createdAt          DateTime            @default(now())
+  serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+  createdAt    DateTime      @default(now())
 
   @@unique([businessId, idempotencyKey])
   @@index([businessId])
@@ -553,27 +551,27 @@ model SaleItem {
 }
 
 model ServiceOrder {
-  id           String   @id @default(cuid())
+  id           String @id @default(cuid())
   ticketNumber String
 
- //---------------------------------------------------
-// RELACIONES
-//---------------------------------------------------
+  //---------------------------------------------------
+  // RELACIONES
+  //---------------------------------------------------
 
-businessId String
-business   Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
+  businessId String
+  business   Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
 
-customerId String
-customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
 
-receivedById String?
-receivedBy User? @relation("ReceivedServices", fields: [receivedById], references: [id])
+  receivedById String?
+  receivedBy   User?   @relation("ReceivedServices", fields: [receivedById], references: [id])
 
-technicianId String?
-technician User? @relation("TechnicianServices", fields: [technicianId], references: [id])
+  technicianId String?
+  technician   User?   @relation("TechnicianServices", fields: [technicianId], references: [id])
 
-deliveredById String?
-deliveredBy User? @relation("DeliveredServices", fields: [deliveredById], references: [id])
+  deliveredById String?
+  deliveredBy   User?   @relation("DeliveredServices", fields: [deliveredById], references: [id])
 
   //---------------------------------------------------
   // INFORMACIÓN DEL EQUIPO
@@ -621,17 +619,17 @@ deliveredBy User? @relation("DeliveredServices", fields: [deliveredById], refere
 
   diagnostic String?
 
-repairSolution String?
+  repairSolution String?
 
-estimatedRepairTime String?
+  estimatedRepairTime String?
 
-estimatedCost Decimal?
+  estimatedCost Decimal?
 
-customerApproved Boolean @default(false)
+  customerApproved Boolean @default(false)
 
-laborCost Decimal @default(0.00)
+  laborCost Decimal @default(0.00)
 
-totalAmount Decimal @default(0.00)
+  totalAmount Decimal @default(0.00)
 
   //---------------------------------------------------
   // GARANTÍA
@@ -668,20 +666,13 @@ totalAmount Decimal @default(0.00)
   updatedAt DateTime @updatedAt
 
   @@unique([businessId, ticketNumber])
-
-@@index([businessId])
-
-@@index([status])
-
-@@index([customerId])
-
-@@index([receivedById])
-
-@@index([technicianId])
-
-@@index([deliveredById])
-
-@@index([createdAt])
+  @@index([businessId])
+  @@index([status])
+  @@index([customerId])
+  @@index([receivedById])
+  @@index([technicianId])
+  @@index([deliveredById])
+  @@index([createdAt])
 }
 
 model ServicePhoto {
@@ -692,7 +683,7 @@ model ServicePhoto {
   //---------------------------------------------------
 
   serviceOrderId String
-  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
 
   //---------------------------------------------------
   // INFORMACIÓN DE LA FOTO
@@ -709,16 +700,14 @@ model ServicePhoto {
   //---------------------------------------------------
 
   uploadedById String
-  uploadedBy User @relation(fields: [uploadedById], references: [id])
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
 
   createdAt DateTime @default(now())
 
   //---------------------------------------------------
 
   @@index([serviceOrderId])
-
   @@index([type])
-
   @@index([createdAt])
 }
 
@@ -752,7 +741,6 @@ model ServiceItem {
   //---------------------------------------------------
 
   @@index([serviceOrderId])
-
   @@index([productId])
 }
 
@@ -767,7 +755,7 @@ model ServiceLog {
   serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
 
   userId String
-  user   User @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   //---------------------------------------------------
   // EVENTO
@@ -775,20 +763,18 @@ model ServiceLog {
 
   statusFrom String
 
-statusTo String
+  statusTo String
 
-action String @default("SYSTEM")
+  action String @default("SYSTEM")
 
-note String?
+  note String?
 
   //---------------------------------------------------
 
   createdAt DateTime @default(now())
 
   @@index([serviceOrderId])
-
   @@index([userId])
-
   @@index([createdAt])
 }
 

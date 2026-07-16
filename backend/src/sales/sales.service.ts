@@ -529,4 +529,6 @@ export class SalesService {
             salesCount: sales.length,
         };
     }
+
+    
 }

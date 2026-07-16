@@ -10,17 +10,20 @@ import {
 } from "@prisma/client";
 
 import { PrismaService } from "../prisma/prisma.service";
-
+import { randomUUID } from "crypto";
 import { CreateServiceOrderDto } from "./dto/create-service-order.dto";
 import { ChangeStatusDto } from "./dto/change-status.dto";
 import { AssignTechnicianDto } from "./dto/assign-technician.dto";
 import { AddServiceItemDto } from "./dto/add-service-item.dto";
 import { UpdateServiceOrderDto } from "./dto/update-service-order.dto";
+import { SalesService } from "../sales/sales.service";
+import { InvoiceServiceOrderDto } from "./dto/invoice-service-order.dto";
 
 @Injectable()
 export class ServiceOrdersService {
     constructor(
         private readonly prisma: PrismaService,
+        private salesService: SalesService,
     ) { }
 
     // ==========================================
@@ -30,28 +33,21 @@ export class ServiceOrdersService {
     private readonly allowedTransitions: Record<ServiceStatus, ServiceStatus[]> = {
         RECEIVED: [
             ServiceStatus.DIAGNOSING,
-            ServiceStatus.CANCELLED,
         ],
 
         DIAGNOSING: [
-            ServiceStatus.WAITING_PARTS,
             ServiceStatus.REPAIRED,
-            ServiceStatus.CANCELLED,
-        ],
-
-        WAITING_PARTS: [
-            ServiceStatus.DIAGNOSING,
-            ServiceStatus.REPAIRED,
-            ServiceStatus.CANCELLED,
         ],
 
         REPAIRED: [
+            ServiceStatus.READY_FOR_PICKUP,
+        ],
+
+        READY_FOR_PICKUP: [
             ServiceStatus.DELIVERED,
         ],
 
         DELIVERED: [],
-
-        CANCELLED: [],
     };
 
     // ==========================================
@@ -245,8 +241,7 @@ export class ServiceOrdersService {
         const order = await this.findOne(serviceOrderId, businessId);
 
         if (
-            order.status === ServiceStatus.DELIVERED ||
-            order.status === ServiceStatus.CANCELLED
+            order.status === ServiceStatus.DELIVERED
         ) {
             throw new BadRequestException(
                 "No se puede cambiar el técnico de una orden finalizada."
@@ -308,10 +303,10 @@ export class ServiceOrdersService {
 
         if (
             order.status === ServiceStatus.DELIVERED ||
-            order.status === ServiceStatus.CANCELLED
+            order.status === ServiceStatus.READY_FOR_PICKUP
         ) {
             throw new BadRequestException(
-                "No se pueden modificar órdenes finalizadas."
+                "No se puede modificar el estado de esta orden."
             );
         }
 
@@ -383,7 +378,14 @@ export class ServiceOrdersService {
                 },
             });
             if (!order) throw new NotFoundException("Orden no encontrada.");
-            if (order.status === 'DELIVERED') throw new BadRequestException("No puedes modificar una orden entregada.");
+            if (
+                order.status === ServiceStatus.READY_FOR_PICKUP ||
+                order.status === ServiceStatus.DELIVERED
+            ) {
+                throw new BadRequestException(
+                    "No puedes modificar esta reparación."
+                );
+            }
 
             const updatedOrder = await tx.serviceOrder.update({
                 where: { id },
@@ -426,11 +428,11 @@ export class ServiceOrdersService {
             const order = await this.findOne(serviceOrderId, businessId);
 
             if (
-                order.status === ServiceStatus.DELIVERED ||
-                order.status === ServiceStatus.CANCELLED
+                order.status === ServiceStatus.READY_FOR_PICKUP ||
+                order.status === ServiceStatus.DELIVERED
             ) {
                 throw new BadRequestException(
-                    "No se pueden agregar repuestos a una orden finalizada."
+                    "No se pueden agregar repuestos."
                 );
             }
 
@@ -521,11 +523,11 @@ export class ServiceOrdersService {
             if (!order) throw new NotFoundException("Orden no encontrada");
 
             if (
-                order.status === ServiceStatus.DELIVERED ||
-                order.status === ServiceStatus.CANCELLED
+                order.status === ServiceStatus.READY_FOR_PICKUP ||
+                order.status === ServiceStatus.DELIVERED
             ) {
                 throw new BadRequestException(
-                    "No se pueden eliminar repuestos de una orden finalizada."
+                    "No puedes modificar el costo de la reparación."
                 );
             }
 
@@ -604,71 +606,174 @@ export class ServiceOrdersService {
         });
     }
 
-    // ==========================================
-    // COMPLETAR / ENTREGAR ORDEN
-    // ==========================================
 
-    async completeServiceOrder(
-        orderId: string,
+
+
+    async deliverDevice(
+        id: string,
         userId: string,
         businessId: string,
     ) {
-        return await this.prisma.$transaction(
-            async (tx) => {
-                const order = await tx.serviceOrder.findFirst({
-                    where: {
-                        id: orderId,
-                        businessId,
-                    },
-                    include: {
-                        sale: true,
-                    },
-                });
 
-                if (!order) {
-                    throw new NotFoundException(
-                        "Orden no encontrada."
-                    );
-                }
-
-                if (order.status !== ServiceStatus.REPAIRED) {
-                    throw new BadRequestException(
-                        "La orden debe estar reparada antes de ser entregada."
-                    );
-                }
-
-                // Debe estar facturada antes de entregarse
-                if (!order.sale) {
-                    throw new BadRequestException(
-                        "Debe facturar la reparación antes de entregar el equipo."
-                    );
-                }
-
-                await tx.serviceLog.create({
-                    data: {
-                        serviceOrderId: order.id,
-                        statusFrom: order.status,
-                        statusTo: ServiceStatus.DELIVERED,
-                        note: `Equipo entregado al cliente. Factura: ${order.sale.invoiceNumber}`,
-                        userId,
-                        action: "COMPLETE_ORDER",
-                    },
-                });
-
-                return await tx.serviceOrder.update({
-                    where: {
-                        id: orderId,
-                    },
-                    data: {
-                        status: ServiceStatus.DELIVERED,
-                        deliveredAt: new Date(),
-                        deliveredById: userId,
-                    },
-                });
+        const order = await this.prisma.serviceOrder.findFirst({
+            where: {
+                id,
+                businessId,
             },
-            {
-                isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            include: {
+                sale: true,
             },
-        );
+        });
+
+        if (!order) {
+            throw new NotFoundException(
+                "Orden de reparación no encontrada."
+            );
+        }
+
+        if (order.status !== ServiceStatus.READY_FOR_PICKUP) {
+            throw new BadRequestException(
+                "El equipo aún no está listo para ser entregado."
+            );
+        }
+
+        if (!order.sale) {
+            throw new BadRequestException(
+                "La reparación no ha sido facturada."
+            );
+        }
+
+        return await this.prisma.$transaction(async (tx) => {
+
+            await tx.serviceLog.create({
+                data: {
+                    serviceOrderId: order.id,
+                    statusFrom: ServiceStatus.READY_FOR_PICKUP,
+                    statusTo: ServiceStatus.DELIVERED,
+                    note: "Equipo entregado al cliente.",
+                    userId,
+                    action: "DELIVER_DEVICE",
+                },
+            });
+
+            return await tx.serviceOrder.update({
+                where: {
+                    id: order.id,
+                },
+                data: {
+                    status: ServiceStatus.DELIVERED,
+                    deliveredAt: new Date(),
+                    deliveredById: userId,
+                },
+            });
+
+        });
+
     }
+
+    async invoiceServiceOrder(
+        id: string,
+        userId: string,
+        businessId: string,
+        dto: InvoiceServiceOrderDto,
+    ) {
+
+        const order = await this.prisma.serviceOrder.findFirst({
+            where: {
+                id,
+                businessId,
+            },
+            include: {
+                sale: true,
+                items: true,
+            },
+        });
+
+        if (!order) {
+            throw new NotFoundException(
+                "Orden de reparación no encontrada."
+            );
+        }
+
+        if (order.sale) {
+            throw new BadRequestException(
+                "Esta reparación ya fue facturada."
+            );
+        }
+
+        if (order.status !== ServiceStatus.REPAIRED) {
+            throw new BadRequestException(
+                "La reparación debe estar finalizada antes de ser facturada."
+            );
+
+
+        }
+
+        if (Number(order.totalAmount) <= 0) {
+            throw new BadRequestException(
+                "La reparación no tiene un monto válido."
+            );
+        }
+
+        const saleItems = order.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            salePrice: Number(item.priceUnit),
+        }));
+
+        const createSaleDto = {
+
+            idempotencyKey: randomUUID(),
+
+            paymentMethod: dto.paymentMethod,
+
+            received: dto.received,
+
+            change: dto.change,
+
+            initialPayment: dto.initialPayment,
+
+            customerId: order.customerId,
+
+            customTotal: Number(order.totalAmount),
+
+            ncfType: dto.ncfType,
+
+            serviceOrderId: order.id,
+
+            items: saleItems,
+
+        };
+
+        const sale = await this.salesService.createSale(
+            createSaleDto,
+            userId,
+            businessId,
+        );
+
+        await this.prisma.serviceOrder.update({
+            where: {
+                id: order.id,
+            },
+            data: {
+                status: ServiceStatus.READY_FOR_PICKUP,
+            },
+        });
+
+        await this.prisma.serviceLog.create({
+            data: {
+                serviceOrderId: order.id,
+                statusFrom: ServiceStatus.REPAIRED,
+                statusTo: ServiceStatus.READY_FOR_PICKUP,
+                note: `Reparación facturada. Equipo listo para ser retirado.`,
+                userId,
+                action: "READY_FOR_PICKUP",
+            },
+        });
+
+        return sale;
+
+    }
+
+
 }

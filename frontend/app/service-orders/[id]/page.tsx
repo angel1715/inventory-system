@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import InvoiceServiceModal from "@/components/services/InvoiceServiceModal";
 import {
   getServiceOrder,
   addServiceItem,
   getProducts,
   updateServiceStatus,
   updateLaborCost,
-  completeServiceOrder,
   updateServiceOrder,
+  invoiceServiceOrder,
 } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Plus, ArrowLeft } from "lucide-react";
@@ -19,7 +20,10 @@ export default function ServiceOrderDetailPage() {
   const id = params?.id as string;
 
   const [order, setOrder] = useState<any>(null);
+
   const [loading, setLoading] = useState(true);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+
   const router = useRouter();
 
   const [isEditingLabor, setIsEditingLabor] = useState(false);
@@ -47,6 +51,8 @@ export default function ServiceOrderDetailPage() {
     estimatedRepairTime: "",
     customerApproved: false,
   });
+
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
   useEffect(() => {
     if (id) loadOrder();
@@ -82,24 +88,41 @@ export default function ServiceOrderDetailPage() {
   }
 
   // ... (todas las funciones se mantienen iguales) ...
-  const handleComplete = async () => {
-    if (
-      !confirm(
-        "¿Finalizar reparación y emitir factura? Esta acción descontará el inventario.",
-      )
-    )
-      return;
+  const handleComplete = () => {
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleInvoiceServiceOrder = async (data: {
+    paymentMethod: string;
+    received: number;
+    change: number;
+    ncfType?: string;
+  }) => {
     try {
-      setLoading(true);
-      await completeServiceOrder(order.id);
-      toast.success("Orden entregada y factura generada");
-      window.location.reload();
+      setInvoiceLoading(true);
+
+      await invoiceServiceOrder(id, {
+        paymentMethod: data.paymentMethod,
+        received: data.received,
+        change: data.change,
+        ncfType: data.ncfType,
+      });
+
+      toast.success("Reparación entregada y factura generada correctamente.");
+
+      setIsInvoiceModalOpen(false);
+
+      await loadOrder();
     } catch (err: any) {
-      const serverMessage =
-        err.response?.data?.message || err.message || "Error desconocido";
-      toast.error(`Error: ${serverMessage}`);
+      console.error(err);
+
+      toast.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          "No se pudo generar la factura.",
+      );
     } finally {
-      setLoading(false);
+      setInvoiceLoading(false);
     }
   };
 
@@ -596,6 +619,14 @@ export default function ServiceOrderDetailPage() {
           </div>
         </div>
       )}
+
+      <InvoiceServiceModal
+        open={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        total={Number(order.totalAmount)}
+        loading={invoiceLoading}
+        onConfirm={handleInvoiceServiceOrder}
+      />
     </div>
   );
 }
