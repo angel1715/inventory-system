@@ -27,7 +27,7 @@ export default function InvoiceServiceModal({
 }: Props) {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [received, setReceived] = useState("");
-  const [ncfType, setNcfType] = useState("FINAL_CONSUMER");
+  const [ncfType, setNcfType] = useState("B02");
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -191,8 +191,9 @@ export default function InvoiceServiceModal({
             onChange={(e) => setNcfType(e.target.value)}
             className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black"
           >
-            <option value="FINAL_CONSUMER">Consumidor Final (B02)</option>
-            <option value="FISCAL">Crédito Fiscal (B01)</option>
+            <option value="B02">Consumidor Final (B02)</option>
+
+            <option value="B01">Crédito Fiscal (B01)</option>
           </select>
         </div>
 
