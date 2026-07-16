@@ -39,7 +39,7 @@ export default function InvoiceServiceModal({
 
     setPaymentMethod("CASH");
     setReceived("");
-    setNcfType("FINAL_CONSUMER");
+    setNcfType("B02");
   }, [open]);
 
   // -------------------------------------
@@ -191,9 +191,9 @@ export default function InvoiceServiceModal({
             onChange={(e) => setNcfType(e.target.value)}
             className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black"
           >
-            <option value="B02">Consumidor Final (B02)</option>
+            <option value="B02">B02 - Consumidor Final</option>
 
-            <option value="B01">Crédito Fiscal (B01)</option>
+            <option value="B01">B01 - Crédito Fiscal</option>
           </select>
         </div>
 
