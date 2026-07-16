@@ -267,6 +267,11 @@ export class ServiceOrdersService {
                 data: { technicianId: dto.technicianId },
             });
 
+            console.log("================================");
+            console.log("UPDATED ORDER");
+            console.log(updatedOrder);
+            console.log("================================");
+
             await tx.serviceLog.create({
                 data: {
                     serviceOrderId: order.id,
