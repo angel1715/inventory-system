@@ -40,6 +40,7 @@ const STATUS_COLORS: Record<string, string> = {
   DIAGNOSING: "bg-yellow-100 text-yellow-700",
   WAITING_PARTS: "bg-orange-100 text-orange-700",
   REPAIRED: "bg-green-100 text-green-700",
+  READY_FOR_PICKUP: "bg-teal-100 text-teal-700", // 👈 Añadido
   DELIVERED: "bg-emerald-100 text-emerald-700",
   CANCELLED: "bg-red-100 text-red-700",
 };
@@ -49,6 +50,7 @@ const STATUS_LABELS: Record<string, string> = {
   DIAGNOSING: "Diagnóstico",
   WAITING_PARTS: "Esperando Repuestos",
   REPAIRED: "Reparado",
+  READY_FOR_PICKUP: "Listo para entregar", // 👈 Añadido
   DELIVERED: "Entregado",
   CANCELLED: "Cancelado",
 };
