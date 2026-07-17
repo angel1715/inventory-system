@@ -76,39 +76,6 @@ export default function ReceiptModal({
     printWindow.document.close();
   }
 
-  /*
-  async function handleDownloadPDF() {
-    if (!receiptRef.current || processing) return;
-
-    try {
-      setProcessing(true);
-      const html2pdf = (await import("html2pdf.js")).default;
-
-      // Clonamos para asegurar que el contenido sea capturable
-      const element = receiptRef.current.cloneNode(true) as HTMLElement;
-      element.style.display = "block";
-      element.style.color = "black";
-      element.style.padding = "20px";
-      element.style.backgroundColor = "white";
-
-      const opt = {
-        margin: 0.2,
-        filename: `factura-${sale.invoiceNumber}.pdf`,
-        image: { type: "jpeg", quality: 1 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-      };
-
-      await html2pdf().set(opt).from(element).save();
-      toast.success("PDF generado exitosamente");
-    } catch (err) {
-      console.error(err);
-      toast.error("Error al generar PDF");
-    } finally {
-      setProcessing(false);
-    }
-  }
-    */
 
   useEffect(() => {
     if (open && autoPrint) {

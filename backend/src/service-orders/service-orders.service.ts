@@ -705,12 +705,10 @@ export class ServiceOrdersService {
             );
         }
 
-        if (order.status !== ServiceStatus.REPAIRED) {
+        if (order.status !== ServiceStatus.READY_FOR_PICKUP) {
             throw new BadRequestException(
-                "La reparación debe estar finalizada antes de ser facturada."
+                "La reparación aún no está lista para ser retirada."
             );
-
-
         }
 
         if (Number(order.totalAmount) <= 0) {
@@ -754,24 +752,25 @@ export class ServiceOrdersService {
             userId,
             businessId,
         );
-
         await this.prisma.serviceOrder.update({
             where: {
                 id: order.id,
             },
             data: {
-                status: ServiceStatus.READY_FOR_PICKUP,
+                status: ServiceStatus.DELIVERED,
+                deliveredAt: new Date(),
             },
         });
+
 
         await this.prisma.serviceLog.create({
             data: {
                 serviceOrderId: order.id,
-                statusFrom: ServiceStatus.REPAIRED,
-                statusTo: ServiceStatus.READY_FOR_PICKUP,
-                note: `Reparación facturada. Equipo listo para ser retirado.`,
+                statusFrom: ServiceStatus.READY_FOR_PICKUP,
+                statusTo: ServiceStatus.DELIVERED,
+                note: "Reparación entregada al cliente.",
                 userId,
-                action: "READY_FOR_PICKUP",
+                action: "DELIVERED",
             },
         });
 

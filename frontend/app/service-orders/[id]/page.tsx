@@ -14,6 +14,7 @@ import {
 import toast from "react-hot-toast";
 import { Plus, ArrowLeft } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
+import ReceiptModal from "@/components/receipt/ReceiptModal";
 
 export default function ServiceOrderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -54,6 +55,10 @@ export default function ServiceOrderDetailPage() {
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
 
+  const [receiptOpen, setReceiptOpen] = useState(false);
+
+  const [completedSale, setCompletedSale] = useState<any>(null);
+
   useEffect(() => {
     if (id) loadOrder();
   }, [id]);
@@ -87,8 +92,13 @@ export default function ServiceOrderDetailPage() {
     }
   }
 
-  // ... (todas las funciones se mantienen iguales) ...
   const handleComplete = () => {
+    if (order.status !== "READY_FOR_PICKUP") {
+      toast.error("La reparación aún no está lista.");
+
+      return;
+    }
+
     setIsInvoiceModalOpen(true);
   };
 
@@ -101,12 +111,26 @@ export default function ServiceOrderDetailPage() {
     try {
       setInvoiceLoading(true);
 
-      await invoiceServiceOrder(id, {
+      const sale = await invoiceServiceOrder(id, {
         paymentMethod: data.paymentMethod,
         received: data.received,
         change: data.change,
         ncfType: data.ncfType,
       });
+
+      // Guardamos la venta retornada por el backend.
+      setCompletedSale(sale);
+
+      // Cerramos el modal de pago.
+      setIsInvoiceModalOpen(false);
+
+      // Abrimos el modal del recibo.
+      setReceiptOpen(true);
+
+      toast.success("Reparación entregada y factura generada correctamente.");
+
+      // Actualizamos la información de la orden.
+      await loadOrder();
 
       toast.success("Reparación entregada y factura generada correctamente.");
 
@@ -520,7 +544,7 @@ export default function ServiceOrderDetailPage() {
                   onClick={handleComplete}
                   className="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-semibold transition shadow-lg shadow-green-100"
                 >
-                  Entregar Reparación
+                  Facturar y Entregar
                 </button>
               )}
 
@@ -593,8 +617,8 @@ export default function ServiceOrderDetailPage() {
             >
               <option value="RECEIVED">Recibido</option>
               <option value="DIAGNOSING">Diagnosticando</option>
+              <option value="WAITING_PARTS">Esperando piezas</option>
               <option value="REPAIRED">Reparado</option>
-              <option value="DELIVERED">Entregado</option>
             </select>
             <textarea
               placeholder="Nota del cambio (obligatoria)"
@@ -626,6 +650,12 @@ export default function ServiceOrderDetailPage() {
         total={Number(order.totalAmount)}
         loading={invoiceLoading}
         onConfirm={handleInvoiceServiceOrder}
+      />
+
+      <ReceiptModal
+        open={receiptOpen}
+        sale={completedSale}
+        onClose={() => setReceiptOpen(false)}
       />
     </div>
   );
