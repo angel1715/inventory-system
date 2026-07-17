@@ -163,9 +163,9 @@ export default function InvoiceServiceModal({
             <button
               key={method}
               type="button"
-              disabled={loading}
+              disabled={loading} // 👈 Bloqueado si está cargando
               onClick={() => setPaymentMethod(method)}
-              className={`p-4 rounded-2xl border font-bold transition ${
+              className={`p-4 rounded-2xl border font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
                 paymentMethod === method
                   ? "bg-black text-white border-black"
                   : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
@@ -187,12 +187,11 @@ export default function InvoiceServiceModal({
           </label>
           <select
             value={ncfType}
-            disabled={loading}
+            disabled={loading} // 👈 Bloqueado si está cargando
             onChange={(e) => setNcfType(e.target.value)}
-            className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black"
+            className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="B02">B02 - Consumidor Final</option>
-
             <option value="B01">B01 - Crédito Fiscal</option>
           </select>
         </div>

@@ -39,6 +39,7 @@ export default function ServiceOrderDetailPage() {
 
   const [newStatus, setNewStatus] = useState("RECEIVED");
   const [changeNote, setChangeNote] = useState("");
+  const [addingItem, setAddingItem] = useState(false);
 
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [infoForm, setInfoForm] = useState({
@@ -167,13 +168,19 @@ export default function ServiceOrderDetailPage() {
 
   const handleAddItem = async () => {
     if (!selectedProduct) return toast.error("Selecciona un producto");
+
     try {
+      setAddingItem(true); // 👈 Bloqueamos el botón
       await addServiceItem(id, { productId: selectedProduct, quantity });
       toast.success("Repuesto agregado");
       setIsItemModalOpen(false);
+      setSelectedProduct(""); // Opcional: limpiar selección
+      setQuantity(1); // Opcional: reiniciar cantidad
       loadOrder();
     } catch {
       toast.error("Error al agregar repuesto");
+    } finally {
+      setAddingItem(false); // 👈 Liberamos el botón pase lo que pase
     }
   };
 
@@ -582,16 +589,20 @@ export default function ServiceOrderDetailPage() {
             />
             <div className="flex gap-4">
               <button
+                type="button"
+                disabled={addingItem}
                 onClick={() => setIsItemModalOpen(false)}
-                className="flex-1 py-4 bg-red-500 rounded-2xl border border-zinc-200 font-medium"
+                className="flex-1 py-4 bg-red-500 text-white rounded-2xl border border-zinc-200 font-medium disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
+                type="button"
+                disabled={addingItem}
                 onClick={handleAddItem}
-                className="flex-1 py-4 bg-zinc-900 text-white rounded-2xl font-semibold"
+                className="flex-1 py-4 bg-zinc-900 text-white rounded-2xl font-semibold disabled:opacity-50 flex items-center justify-center"
               >
-                Confirmar
+                {addingItem ? "Agregando..." : "Confirmar"}
               </button>
             </div>
           </div>
