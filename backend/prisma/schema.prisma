@@ -156,27 +156,35 @@ model Business {
 }
 
 model BusinessSettings {
-  id            String   @id @default(cuid())
-  businessName  String
-  tradeName     String?
-  rnc           String?
-  phone         String?
-  email         String?
-  website       String?
-  instagram     String?
-  facebook      String?
-  address       String?
-  city          String?
-  country       String?
-  logoUrl       String?
-  taxRate       Float    @default(18)
-  currency      String   @default("DOP")
-  invoiceFooter String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String  @id @default(cuid())
+  businessName String
+  tradeName    String?
+  rnc          String?
+  phone        String?
+  email        String?
+  website      String?
+  instagram    String?
+  facebook     String?
+  address      String?
+  city         String?
+  country      String?
+  logoUrl      String?
 
-  businessId String   @unique
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  taxRate  Float  @default(18)
+  currency String @default("DOP")
+
+  // CONFIGURACIONES FISCALES
+  useItbis Boolean @default(false)
+  useNcf   Boolean @default(false)
+
+  invoiceFooter String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  businessId String @unique
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
 }
 
 model Subscription {

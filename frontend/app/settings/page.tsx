@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import NewSequenceModal from "@/components/NewSequenceModal";
-import { uploadImage } from "@/lib/uploadImage"
+import { uploadImage } from "@/lib/uploadImage";
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
@@ -34,6 +34,8 @@ export default function SettingsPage() {
     taxRate: 18,
     currency: "DOP",
     invoiceFooter: "",
+    useItbis: false,
+    useNcf: false,
   });
 
   async function load() {
@@ -55,6 +57,8 @@ export default function SettingsPage() {
         taxRate: data.taxRate ?? 18,
         currency: data.currency || "DOP",
         invoiceFooter: data.invoiceFooter || "",
+        useItbis: data.useItbis ?? false,
+        useNcf: data.useNcf ?? false,
       });
     } catch (err: any) {
       toast.error("Error al cargar la configuración");
@@ -94,12 +98,20 @@ export default function SettingsPage() {
 
   async function handleSave() {
     // Validaciones de Integridad
-    if (!form.businessName.trim())
+    if (form.useItbis) {
+      if (form.taxRate <= 0) {
+        return toast.error("Debe especificar el porcentaje del ITBIS.");
+      }
+    }
+
+    if (!form.businessName.trim()) {
       return toast.error("El nombre de la empresa es obligatorio");
-    if (form.taxRate < 0 || form.taxRate > 100)
-      return toast.error("El impuesto debe estar entre 0 y 100");
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      return toast.error("Formato de correo electrónico inválido");
+    }
+
+    if (form.useItbis) {
+      if (form.taxRate < 0 || form.taxRate > 100) {
+        return toast.error("El ITBIS debe estar entre 0 y 100");
+      }
     }
 
     try {
@@ -281,60 +293,70 @@ export default function SettingsPage() {
           </div>
 
           {/* BLOQUE 2: SECUENCIAS FISCALES */}
-          <div className="bg-white rounded-3xl border p-8 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Secuencias Fiscales (NCF)
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-800"
-              >
-                + Nueva Secuencia
-              </button>
-            </div>
+          {form.useNcf && (
+            <div className="bg-white rounded-3xl border p-8 shadow-sm">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Secuencias Fiscales (NCF)
+                </h2>
 
-            <div className="space-y-4">
-              {sequences.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">
-                  No hay secuencias configuradas aún.
-                </p>
-              ) : (
-                sequences.map((seq) => (
-                  <div
-                    key={seq.id}
-                    className="flex items-center justify-between p-5 border rounded-2xl hover:bg-gray-50 transition"
-                  >
-                    <div>
-                      <p className="font-bold text-lg">
-                        {seq.type} - {seq.prefix}
-                      </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Rango: {seq.startAt} - {seq.endAt} | Actual:{" "}
-                        {seq.current}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span
-                        className={`px-4 py-1.5 rounded-full text-sm font-medium ${seq.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
-                      >
-                        {seq.active ? "Activa" : "Inactiva"}
-                      </span>
-                      {!seq.active && (
-                        <button
-                          onClick={() => handleActivate(seq.id)}
-                          disabled={loading}
-                          className="text-black font-semibold underline hover:text-gray-700 disabled:opacity-50"
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-800"
+                >
+                  + Nueva Secuencia
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {sequences.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">
+                    No hay secuencias configuradas aún.
+                  </p>
+                ) : (
+                  sequences.map((seq) => (
+                    <div
+                      key={seq.id}
+                      className="flex items-center justify-between p-5 border rounded-2xl hover:bg-gray-50 transition"
+                    >
+                      <div>
+                        <p className="font-bold text-lg">
+                          {seq.type} - {seq.prefix}
+                        </p>
+
+                        <p className="text-sm text-gray-500 mt-1">
+                          Rango: {seq.startAt} - {seq.endAt} | Actual:{" "}
+                          {seq.current}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <span
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium ${
+                            seq.active
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
                         >
-                          Activar
-                        </button>
-                      )}
+                          {seq.active ? "Activa" : "Inactiva"}
+                        </span>
+
+                        {!seq.active && (
+                          <button
+                            onClick={() => handleActivate(seq.id)}
+                            disabled={loading}
+                            className="text-black font-semibold underline hover:text-gray-700 disabled:opacity-50"
+                          >
+                            Activar
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <NewSequenceModal

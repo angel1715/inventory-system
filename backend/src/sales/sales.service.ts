@@ -66,8 +66,18 @@ export class SalesService {
             if (!session) throw new BadRequestException("No hay sesión abierta.");
 
             let subtotal = 0, costTotal = 0;
-            const settings = await tx.businessSettings.findFirst({ where: { businessId } });
-            const taxRate = settings?.taxRate ?? 18;
+            const settings = await tx.businessSettings.findFirst({
+                where: {
+                    businessId,
+                },
+            });
+
+            const useTax = settings?.useItbis ?? false;
+            const useNcf = settings?.useNcf ?? false;
+
+            const taxRate = useTax
+                ? settings?.taxRate ?? 18
+                : 0;
 
             // ==========================================
             // VALIDAR ORDEN DE REPARACIÓN
@@ -112,7 +122,9 @@ export class SalesService {
                 costTotal += item.quantity * Number(product.costPrice);
             }
 
-            const originalTotal = round(subtotal * (1 + taxRate / 100));
+            const originalTotal = round(
+                subtotal * (1 + taxRate / 100)
+            );
             const customTotal = Math.min(round(dto.customTotal || originalTotal), originalTotal);
             if (customTotal < costTotal) throw new BadRequestException("Precio menor al costo.");
 
@@ -171,17 +183,35 @@ export class SalesService {
                 });
             }
 
-            const ncf = dto.ncfType ? await this.generateAndConsumeNcf(tx, businessId, dto.ncfType) : null;
+            let ncf: string | null = null;
+
+            if (useNcf && dto.ncfType) {
+                ncf = await this.generateAndConsumeNcf(
+                    tx,
+                    businessId,
+                    dto.ncfType
+                );
+            }
             // ... dentro de tu transacción
+            const subtotalAmount = useTax
+                ? round(customTotal / (1 + taxRate / 100))
+                : customTotal;
+
+            const taxAmount = useTax
+                ? round(customTotal - subtotalAmount)
+                : 0;
             const sale = await tx.sale.create({
                 data: {
                     invoiceNumber: `INV-${Date.now()}`,
                     idempotencyKey,
-                    ncf,
-                    ncfType: dto.ncfType ?? null,
 
-                    subtotal: round(customTotal / (1 + taxRate / 100)),
-                    tax: round(customTotal - (customTotal / (1 + taxRate / 100))),
+                    ncf,
+                    ncfType: useNcf
+                        ? dto.ncfType ?? null
+                        : null,
+
+                    subtotal: subtotalAmount,
+                    tax: taxAmount,
                     total: customTotal,
                     discount: round(originalTotal - customTotal),
 
@@ -191,17 +221,17 @@ export class SalesService {
                     createdById: userId,
                     businessId,
 
-                    // 👇 ESTA ES LA RELACIÓN
+                    // Relación con la orden de reparación
                     serviceOrderId: dto.serviceOrderId ?? null,
 
                     items: {
-                        create: dto.items.map(i => ({
+                        create: dto.items.map((i) => ({
                             productId: i.productId,
                             quantity: i.quantity,
                             salePrice: i.salePrice,
-                            lineTotal: round(i.quantity * i.salePrice)
-                        }))
-                    }
+                            lineTotal: round(i.quantity * i.salePrice),
+                        })),
+                    },
                 },
 
                 include: {
@@ -209,10 +239,10 @@ export class SalesService {
                         select: {
                             id: true,
                             name: true,
-                            role: true
-                        }
-                    }
-                }
+                            role: true,
+                        },
+                    },
+                },
             });
 
             if (dto.serviceOrderId) {
@@ -530,5 +560,5 @@ export class SalesService {
         };
     }
 
-    
+
 }
