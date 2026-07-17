@@ -107,9 +107,12 @@ export class SalesService {
                     );
                 }
 
-                if (serviceOrder.status !== ServiceStatus.REPAIRED) {
+                if (
+                    serviceOrder.status !== ServiceStatus.REPAIRED &&
+                    serviceOrder.status !== ServiceStatus.READY_FOR_PICKUP
+                ) {
                     throw new BadRequestException(
-                        "Solo las órdenes reparadas pueden ser facturadas."
+                        "Solo las órdenes reparadas o listas para retirar pueden ser facturadas."
                     );
                 }
             }
@@ -128,13 +131,9 @@ export class SalesService {
             const customTotal = Math.min(round(dto.customTotal || originalTotal), originalTotal);
             if (customTotal < costTotal) throw new BadRequestException("Precio menor al costo.");
 
-            // ... dentro del bucle de items de createSale
-            // --- DENTRO DE createSale, en el bucle de items ---
-
             for (const item of dto.items) {
-                // 1. Validar existencia del producto CON SEGURIDAD (incluyendo businessId)
                 const p = await tx.product.findUnique({
-                    where: { id: item.productId, businessId } // IMPORTANTE: Agregado businessId
+                    where: { id: item.productId, businessId }
                 });
 
                 if (!p) throw new NotFoundException(`Producto ${item.productId} no encontrado`);
@@ -142,7 +141,6 @@ export class SalesService {
                 const prev = p.stock;
                 const newStock = prev - item.quantity;
 
-                // 2. Actualizar stock y estatus
                 await tx.product.update({
                     where: { id: item.productId },
                     data: {
@@ -151,25 +149,21 @@ export class SalesService {
                     }
                 });
 
-                // 3. MARCADO DE IMEI/SERIAL COMO VENDIDO
-                // Asegúrate que el campo se llame exactamente 'serial' en tu Prisma Schema
                 if (item.serialNumber) {
                     const updateResult = await tx.itemSerial.updateMany({
                         where: {
-                            serial: item.serialNumber, // Asegúrate que 'serial' sea el campo en tu tabla ItemSerial
+                            serial: item.serialNumber,
                             productId: item.productId,
                             isSold: false
                         },
                         data: { isSold: true }
                     });
 
-                    // Debug: Verifica si encontró el registro
                     if (updateResult.count === 0) {
                         throw new BadRequestException(`El serial/IMEI ${item.serialNumber} no está disponible o ya fue vendido.`);
                     }
                 }
 
-                // 4. Registrar movimiento
                 await tx.inventoryMovement.create({
                     data: {
                         businessId,
@@ -192,7 +186,7 @@ export class SalesService {
                     dto.ncfType
                 );
             }
-            // ... dentro de tu transacción
+
             const subtotalAmount = useTax
                 ? round(customTotal / (1 + taxRate / 100))
                 : customTotal;
@@ -200,6 +194,7 @@ export class SalesService {
             const taxAmount = useTax
                 ? round(customTotal - subtotalAmount)
                 : 0;
+
             const sale = await tx.sale.create({
                 data: {
                     invoiceNumber: `INV-${Date.now()}`,
@@ -221,7 +216,6 @@ export class SalesService {
                     createdById: userId,
                     businessId,
 
-                    // Relación con la orden de reparación
                     serviceOrderId: dto.serviceOrderId ?? null,
 
                     items: {
@@ -263,7 +257,6 @@ export class SalesService {
                 await tx.accountsReceivable.create({ data: { saleId: sale.id, customerId: dto.customerId, originalAmount: customTotal, paidAmount: initialPayment, pendingAmount: round(customTotal - initialPayment), status: initialPayment >= customTotal ? "PAID" : "PARTIAL", dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), createdById: userId } });
                 await tx.creditAccount.update({ where: { id: creditAccount.id }, data: { currentDebt: { increment: customTotal } } });
 
-                // Registrar el movimiento de carga de deuda
                 await tx.creditMovement.create({ data: { creditAccountId: creditAccount.id, type: "CHARGE", amount: customTotal, saleId: sale.id, currentDebtSnapshot: round(Number(creditAccount.currentDebt) + customTotal) } });
 
                 if (initialPayment > 0) {
@@ -305,9 +298,7 @@ export class SalesService {
                 } : {})
             };
 
-            // --- ESTA ES LA CORRECCIÓN: Ejecutar la búsqueda y contar el total ---
             const [data, total] = await Promise.all([
-                // En tu método findAll, actualiza el include de items:
                 this.prisma.sale.findMany({
                     where,
                     skip,
@@ -403,16 +394,12 @@ export class SalesService {
         const margenTotalVenta = subtotal - costoTotal;
         const totalVenta = Number(sale.total || 0);
 
-        // Si es contado, ganancia total
         if (sale.paymentMethod !== "CREDIT") return margenTotalVenta;
 
-        // Si es crédito, buscamos cuánto se pagó de esa venta en el rango de tiempo consultado
         const recaudadoEnRango = payments
             .filter(p => p.saleId === sale.id)
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
 
-        // Calculamos qué parte de la ganancia total le corresponde a lo recaudado hoy
-        // Ratio = (Lo pagado hoy) / (Total de la venta)
         const ratioCobrado = totalVenta > 0 ? (recaudadoEnRango / totalVenta) : 0;
 
         return margenTotalVenta * ratioCobrado;
@@ -424,7 +411,6 @@ export class SalesService {
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
     }
 
-
     // =========================================================================
     // DASHBOARD OPTIMIZADO - Lógica de Utilidad Real basada en Caja
     // =========================================================================
@@ -432,7 +418,6 @@ export class SalesService {
         try {
             const dateFilter = this.getDateFilter(range);
 
-            // 1. Buscamos Pagos de Créditos y Gastos del rango
             const [payments, expenses, totalDebtData] = await Promise.all([
                 this.prisma.creditMovement.findMany({
                     where: { type: "PAYMENT", createdAt: dateFilter, creditAccount: { businessId } },
@@ -442,7 +427,6 @@ export class SalesService {
                 this.prisma.creditAccount.aggregate({ where: { businessId }, _sum: { currentDebt: true } }),
             ]);
 
-            // 2. Buscamos todas las ventas del rango (CONTADO Y CRÉDITO)
             const salesInRange = await this.prisma.sale.findMany({
                 where: { businessId, createdAt: dateFilter },
                 include: { items: { include: { product: true } } }
@@ -451,14 +435,12 @@ export class SalesService {
             const cashSales = salesInRange.filter(s => s.paymentMethod !== "CREDIT");
             let totalRealProfit = 0;
 
-            // A. Sumar utilidad de ventas CONTADO
             for (const sale of cashSales) {
                 const subtotal = Number(sale.subtotal || 0);
                 const cost = sale.items.reduce((c, i) => c + (i.quantity * Number(i.product?.costPrice || 0)), 0);
                 totalRealProfit += (subtotal - cost);
             }
 
-            // B. Sumar utilidad PROPORCIONAL de los pagos recibidos
             for (const payment of payments) {
                 if (!payment.sale) continue;
                 const sale = payment.sale;
@@ -470,17 +452,12 @@ export class SalesService {
                 totalRealProfit += (margenTotalVenta * ratioCobrado);
             }
 
-            // --- PROCESAMIENTO PARA GRÁFICOS ---
-
-            // 1. Tendencia de Ventas (Agrupado por día)
             const salesByDayMap = new Map<string, number>();
 
-            // Sumamos ventas de contado
             cashSales.forEach(s => {
                 const date = new Date(s.createdAt).toISOString().split('T')[0];
                 salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(s.total));
             });
-            // Sumamos pagos de crédito (recaudación)
             payments.forEach(p => {
                 const date = new Date(p.createdAt).toISOString().split('T')[0];
                 salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(p.amount));
@@ -490,7 +467,6 @@ export class SalesService {
                 .map(([date, total]) => ({ date, total }))
                 .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-            // 2. Métodos de Pago
             const paymentMethodMap = new Map<string, number>();
             cashSales.forEach(s => {
                 const method = s.paymentMethod || "CASH";
@@ -503,7 +479,6 @@ export class SalesService {
             const paymentMethods = Array.from(paymentMethodMap.entries())
                 .map(([method, total]) => ({ method, total }));
 
-            // --- CÁLCULOS FINALES ---
             const totalCashIn = cashSales.reduce((acc, s) => acc + Number(s.total || 0), 0) + totalRecaudado;
             const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount || 0), 0);
 
@@ -542,7 +517,6 @@ export class SalesService {
             where: { type: "PAYMENT", createdAt: { gte: today }, creditAccount: { businessId } }
         });
 
-        // Buscamos SOLO las ventas de hoy
         const sales = await this.prisma.sale.findMany({
             where: { businessId, createdAt: { gte: today } },
             include: { items: { include: { product: true } } }
@@ -555,10 +529,7 @@ export class SalesService {
         return {
             revenue: round(cashSales + creditCollections),
             profit: round(totalProfit),
-            // CORRECCIÓN: Contamos solo las ventas realizadas hoy
             salesCount: sales.length,
         };
     }
-
-
 }

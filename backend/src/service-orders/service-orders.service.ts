@@ -333,7 +333,7 @@ export class ServiceOrdersService {
                 order.diagnostic.trim() === ""
             ) {
                 throw new BadRequestException(
-                    "PRUEBA_123456_DIAGNOSTICO"
+                    "Necesitas registrar el diagnostico"
                 );
             }
 
