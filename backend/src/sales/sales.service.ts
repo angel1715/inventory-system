@@ -23,6 +23,7 @@ interface CreateSaleInput extends CreateSaleDto {
     serviceOrderId?: string;
 }
 type DateRange = "TODAY" | "WEEK" | "MONTH" | "ALL";
+
 @Injectable()
 export class SalesService {
 
@@ -54,7 +55,7 @@ export class SalesService {
     }
 
     // ==========================================
-    // CREATE SALE (CORREGIDO PARA CRÉDITOS Y CAJA)
+    // CREATE SALE (CON SOPORTE PARA MANO DE OBRA)
     // ==========================================
     async createSale(dto: CreateSaleInput, userId: string, businessId: string) {
         if (!userId) throw new BadRequestException("Authenticated user not found");
@@ -67,57 +68,38 @@ export class SalesService {
 
             let subtotal = 0, costTotal = 0;
             const settings = await tx.businessSettings.findFirst({
-                where: {
-                    businessId,
-                },
+                where: { businessId },
             });
 
             const useTax = settings?.useItbis ?? false;
             const useNcf = settings?.useNcf ?? false;
-
-            const taxRate = useTax
-                ? settings?.taxRate ?? 18
-                : 0;
+            const taxRate = useTax ? settings?.taxRate ?? 18 : 0;
 
             // ==========================================
-            // VALIDAR ORDEN DE REPARACIÓN
+            // NUEVO: VALIDAR ORDEN DE REPARACIÓN Y MANO DE OBRA
             // ==========================================
+            let repairLaborCost = 0;
 
             if (dto.serviceOrderId) {
-
                 const serviceOrder = await tx.serviceOrder.findFirst({
-                    where: {
-                        id: dto.serviceOrderId,
-                        businessId,
-                    },
-                    include: {
-                        sale: true,
-                    },
+                    where: { id: dto.serviceOrderId, businessId },
+                    include: { sale: true },
                 });
 
-                if (!serviceOrder) {
-                    throw new NotFoundException(
-                        "Orden de reparación no encontrada."
-                    );
-                }
-
-                if (serviceOrder.sale) {
-                    throw new BadRequestException(
-                        "Esta reparación ya fue facturada."
-                    );
-                }
+                if (!serviceOrder) throw new NotFoundException("Orden de reparación no encontrada.");
+                if (serviceOrder.sale) throw new BadRequestException("Esta reparación ya fue facturada.");
 
                 if (
                     serviceOrder.status !== ServiceStatus.REPAIRED &&
                     serviceOrder.status !== ServiceStatus.READY_FOR_PICKUP
                 ) {
-                    throw new BadRequestException(
-                        "Solo las órdenes reparadas o listas para retirar pueden ser facturadas."
-                    );
+                    throw new BadRequestException("Solo las órdenes reparadas o listas para retirar pueden ser facturadas.");
                 }
+
+                repairLaborCost = Number(serviceOrder.laborCost || 0);
             }
 
-
+            // Recorrido de los items de productos/repuestos
             for (const item of dto.items) {
                 const product = await tx.product.findUnique({ where: { id: item.productId, businessId } });
                 if (!product) throw new NotFoundException("Producto no encontrado.");
@@ -125,12 +107,21 @@ export class SalesService {
                 costTotal += item.quantity * Number(product.costPrice);
             }
 
-            const originalTotal = round(
-                subtotal * (1 + taxRate / 100)
-            );
+            // ==========================================
+            // AJUSTE: INCLUIR MANO DE OBRA EN EL TOTAL
+            // ==========================================
+            const totalSubtotalWithLabor = subtotal + repairLaborCost;
+            const originalTotal = round(totalSubtotalWithLabor * (1 + taxRate / 100));
             const customTotal = Math.min(round(dto.customTotal || originalTotal), originalTotal);
-            if (customTotal < costTotal) throw new BadRequestException("Precio menor al costo.");
 
+            // Validamos que el total cubra tanto el costo de los productos como la mano de obra del técnico
+            if (customTotal < (costTotal + repairLaborCost)) {
+                throw new BadRequestException("El total de la venta es menor al costo de piezas y mano de obra.");
+            }
+
+            // ==========================================
+            // ACTUALIZACIÓN DE INVENTARIO
+            // ==========================================
             for (const item of dto.items) {
                 const p = await tx.product.findUnique({
                     where: { id: item.productId, businessId }
@@ -201,9 +192,7 @@ export class SalesService {
                     idempotencyKey,
 
                     ncf,
-                    ncfType: useNcf
-                        ? dto.ncfType ?? null
-                        : null,
+                    ncfType: useNcf ? dto.ncfType ?? null : null,
 
                     subtotal: subtotalAmount,
                     tax: taxAmount,
@@ -253,20 +242,78 @@ export class SalesService {
             }
 
             if (dto.paymentMethod === "CREDIT" && dto.customerId) {
-                let creditAccount = await tx.creditAccount.upsert({ where: { customerId: dto.customerId }, update: {}, create: { customerId: dto.customerId, businessId } });
-                await tx.accountsReceivable.create({ data: { saleId: sale.id, customerId: dto.customerId, originalAmount: customTotal, paidAmount: initialPayment, pendingAmount: round(customTotal - initialPayment), status: initialPayment >= customTotal ? "PAID" : "PARTIAL", dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), createdById: userId } });
-                await tx.creditAccount.update({ where: { id: creditAccount.id }, data: { currentDebt: { increment: customTotal } } });
+                let creditAccount = await tx.creditAccount.upsert({
+                    where: { customerId: dto.customerId },
+                    update: {},
+                    create: { customerId: dto.customerId, businessId }
+                });
 
-                await tx.creditMovement.create({ data: { creditAccountId: creditAccount.id, type: "CHARGE", amount: customTotal, saleId: sale.id, currentDebtSnapshot: round(Number(creditAccount.currentDebt) + customTotal) } });
+                await tx.accountsReceivable.create({
+                    data: {
+                        saleId: sale.id,
+                        customerId: dto.customerId,
+                        originalAmount: customTotal,
+                        paidAmount: initialPayment,
+                        pendingAmount: round(customTotal - initialPayment),
+                        status: initialPayment >= customTotal ? "PAID" : "PARTIAL",
+                        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                        createdById: userId
+                    }
+                });
+
+                await tx.creditAccount.update({
+                    where: { id: creditAccount.id },
+                    data: { currentDebt: { increment: customTotal } }
+                });
+
+                await tx.creditMovement.create({
+                    data: {
+                        creditAccountId: creditAccount.id,
+                        type: "CHARGE",
+                        amount: customTotal,
+                        saleId: sale.id,
+                        currentDebtSnapshot: round(Number(creditAccount.currentDebt) + customTotal)
+                    }
+                });
 
                 if (initialPayment > 0) {
-                    await tx.creditMovement.create({ data: { creditAccountId: creditAccount.id, type: "PAYMENT", amount: initialPayment, saleId: sale.id, note: `Abono inicial Factura #${sale.invoiceNumber}`, currentDebtSnapshot: round(customTotal - initialPayment), cashSessionId: session.id } });
-                    await tx.cashMovement.create({ data: { cashSessionId: session.id, type: "INCOME", amount: initialPayment, description: `Abono inicial Factura #${sale.invoiceNumber}`, userId } });
-                    await tx.creditAccount.update({ where: { id: creditAccount.id }, data: { currentDebt: { decrement: initialPayment } } });
+                    await tx.creditMovement.create({
+                        data: {
+                            creditAccountId: creditAccount.id,
+                            type: "PAYMENT",
+                            amount: initialPayment,
+                            saleId: sale.id,
+                            note: `Abono inicial Factura #${sale.invoiceNumber}`,
+                            currentDebtSnapshot: round(customTotal - initialPayment),
+                            cashSessionId: session.id
+                        }
+                    });
+                    await tx.cashMovement.create({
+                        data: {
+                            cashSessionId: session.id,
+                            type: "INCOME",
+                            amount: initialPayment,
+                            description: `Abono inicial Factura #${sale.invoiceNumber}`,
+                            userId
+                        }
+                    });
+                    await tx.creditAccount.update({
+                        where: { id: creditAccount.id },
+                        data: { currentDebt: { decrement: initialPayment } }
+                    });
                 }
             } else {
-                await tx.cashMovement.create({ data: { cashSessionId: session.id, type: "INCOME", amount: customTotal, description: `Venta ${dto.paymentMethod} #${sale.invoiceNumber}`, userId } });
+                await tx.cashMovement.create({
+                    data: {
+                        cashSessionId: session.id,
+                        type: "INCOME",
+                        amount: customTotal,
+                        description: `Venta ${dto.paymentMethod} #${sale.invoiceNumber}`,
+                        userId
+                    }
+                });
             }
+
             return sale;
         }, { isolationLevel: "Serializable" });
     }
@@ -429,7 +476,10 @@ export class SalesService {
 
             const salesInRange = await this.prisma.sale.findMany({
                 where: { businessId, createdAt: dateFilter },
-                include: { items: { include: { product: true } } }
+                include: {
+                    items: { include: { product: true } },
+                    serviceOrder: true   // ← Necesario para obtener laborCost
+                }
             });
 
             const cashSales = salesInRange.filter(s => s.paymentMethod !== "CREDIT");
@@ -438,7 +488,13 @@ export class SalesService {
             for (const sale of cashSales) {
                 const subtotal = Number(sale.subtotal || 0);
                 const cost = sale.items.reduce((c, i) => c + (i.quantity * Number(i.product?.costPrice || 0)), 0);
-                totalRealProfit += (subtotal - cost);
+
+                // ==========================================
+                // NUEVO: RESTAR MANO DE OBRA DEL TÉCNICO
+                // ==========================================
+                const laborExpense = Number(sale.serviceOrder?.laborCost || 0);
+
+                totalRealProfit += (subtotal - cost - laborExpense);
             }
 
             for (const payment of payments) {
@@ -519,7 +575,10 @@ export class SalesService {
 
         const sales = await this.prisma.sale.findMany({
             where: { businessId, createdAt: { gte: today } },
-            include: { items: { include: { product: true } } }
+            include: {
+                items: { include: { product: true } },
+                serviceOrder: true
+            }
         });
 
         const totalProfit = sales.reduce((acc, sale) => acc + this.calculateProfitForSale(sale, payments), 0);
