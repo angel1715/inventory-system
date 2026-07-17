@@ -250,20 +250,59 @@ export default function SettingsPage() {
                   className="text-gray-700 w-full border rounded-2xl p-4"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block mb-2 font-medium text-gray-700">
-                  ITBIS
-                </label>
+              {form.useItbis && (
+                <div className="md:col-span-2">
+                  <label className="block mb-2 font-medium text-gray-700">
+                    ITBIS
+                  </label>
+
+                  <input
+                    type="number"
+                    value={form.taxRate}
+                    onChange={(e) =>
+                      handleChange("taxRate", Number(e.target.value))
+                    }
+                    placeholder="ITBIS / Tax Rate (%)"
+                    className="text-gray-700 w-full border rounded-2xl p-4 outline-none focus:ring-2 focus:ring-black"
+                  />
+                </div>
+              )}
+
+              <div className="md:col-span-2 flex items-center justify-between border rounded-2xl p-4">
+                <div>
+                  <h3 className="font-semibold text-gray-800">Utilizar NCF</h3>
+
+                  <p className="text-sm text-gray-500">
+                    Activa esta opción si tu negocio utiliza comprobantes
+                    fiscales.
+                  </p>
+                </div>
+
                 <input
-                  type="number"
-                  value={form.taxRate}
-                  onChange={(e) =>
-                    handleChange("taxRate", Number(e.target.value))
-                  }
-                  placeholder="ITBIS / Tax Rate (%)"
-                  className="text-gray-700 w-full border rounded-2xl p-4 outline-none focus:ring-2 focus:ring-black"
+                  type="checkbox"
+                  checked={form.useNcf}
+                  onChange={(e) => handleChange("useNcf", e.target.checked)}
                 />
               </div>
+
+              <div className="md:col-span-2 flex items-center justify-between border rounded-2xl p-4">
+                <div>
+                  <h3 className="font-semibold text-gray-800">
+                    Utilizar ITBIS
+                  </h3>
+
+                  <p className="text-sm text-gray-500">
+                    Activa esta opción si tu negocio cobra impuestos.
+                  </p>
+                </div>
+
+                <input
+                  type="checkbox"
+                  checked={form.useItbis}
+                  onChange={(e) => handleChange("useItbis", e.target.checked)}
+                />
+              </div>
+
               <select
                 value={form.currency}
                 onChange={(e) => handleChange("currency", e.target.value)}
