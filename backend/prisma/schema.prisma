@@ -61,6 +61,7 @@ enum NcfType {
   B15
 }
 
+
 enum ServiceStatus {
   RECEIVED
   DIAGNOSING

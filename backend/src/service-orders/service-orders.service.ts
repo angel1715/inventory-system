@@ -29,26 +29,33 @@ export class ServiceOrdersService {
     // ==========================================
     // FLUJO PERMITIDO DE LOS ESTADOS
     // ==========================================
+    private readonly allowedTransitions:
+        Record<ServiceStatus, ServiceStatus[]> = {
 
-    private readonly allowedTransitions: Record<ServiceStatus, ServiceStatus[]> = {
-        RECEIVED: [
-            ServiceStatus.DIAGNOSING,
-        ],
+            RECEIVED: [
+                ServiceStatus.DIAGNOSING,
+            ],
 
-        DIAGNOSING: [
-            ServiceStatus.REPAIRED,
-        ],
+            DIAGNOSING: [
+                ServiceStatus.WAITING_PARTS,
+                ServiceStatus.REPAIRED,
+            ],
 
-        REPAIRED: [
-            ServiceStatus.READY_FOR_PICKUP,
-        ],
+            WAITING_PARTS: [
+                ServiceStatus.DIAGNOSING,
+                ServiceStatus.REPAIRED,
+            ],
 
-        READY_FOR_PICKUP: [
-            ServiceStatus.DELIVERED,
-        ],
+            REPAIRED: [
+                ServiceStatus.READY_FOR_PICKUP,
+            ],
 
-        DELIVERED: [],
-    };
+            READY_FOR_PICKUP: [
+                ServiceStatus.DELIVERED,
+            ],
+
+            DELIVERED: [],
+        };
 
     // ==========================================
     // GENERAR TICKET
