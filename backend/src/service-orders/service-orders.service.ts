@@ -37,12 +37,6 @@ export class ServiceOrdersService {
             ],
 
             DIAGNOSING: [
-                ServiceStatus.WAITING_PARTS,
-                ServiceStatus.REPAIRED,
-            ],
-
-            WAITING_PARTS: [
-                ServiceStatus.DIAGNOSING,
                 ServiceStatus.REPAIRED,
             ],
 

@@ -124,19 +124,13 @@ export default function ServiceOrderDetailPage() {
       // Cerramos el modal de pago.
       setIsInvoiceModalOpen(false);
 
-      // Abrimos el modal del recibo.
+      // Abrimos el recibo.
       setReceiptOpen(true);
 
-      toast.success("Reparación entregada y factura generada correctamente.");
-
-      // Actualizamos la información de la orden.
+      // Actualizamos la orden.
       await loadOrder();
 
       toast.success("Reparación entregada y factura generada correctamente.");
-
-      setIsInvoiceModalOpen(false);
-
-      await loadOrder();
     } catch (err: any) {
       console.error(err);
 
@@ -617,8 +611,8 @@ export default function ServiceOrderDetailPage() {
             >
               <option value="RECEIVED">Recibido</option>
               <option value="DIAGNOSING">Diagnosticando</option>
-              <option value="WAITING_PARTS">Esperando piezas</option>
               <option value="REPAIRED">Reparado</option>
+              <option value="READY_FOR_PICKUP">Listo para retirar</option>
             </select>
             <textarea
               placeholder="Nota del cambio (obligatoria)"

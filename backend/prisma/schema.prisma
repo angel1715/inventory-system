@@ -65,7 +65,6 @@ enum NcfType {
 enum ServiceStatus {
   RECEIVED
   DIAGNOSING
-  WAITING_PARTS
   REPAIRED
   READY_FOR_PICKUP
   DELIVERED
