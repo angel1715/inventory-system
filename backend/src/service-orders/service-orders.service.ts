@@ -303,10 +303,7 @@ export class ServiceOrdersService {
         console.log("TECH:", order.technicianId);
 
 
-        if (
-            order.status === ServiceStatus.DELIVERED ||
-            order.status === ServiceStatus.READY_FOR_PICKUP
-        ) {
+        if (order.status === ServiceStatus.DELIVERED) {
             throw new BadRequestException(
                 "No se puede modificar el estado de esta orden."
             );
