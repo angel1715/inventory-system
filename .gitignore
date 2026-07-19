@@ -1,6 +1,12 @@
 node_modules
 .env
 .env.local
+.env.production.local
+.env.development.local
+
+# local-only docker-compose overrides (ports/secrets for running this repo
+# standalone via `docker compose up`), never part of the real deploy
+docker-compose.override.yml
 
 # agent documentation, local-only
 CLAUDE.md
