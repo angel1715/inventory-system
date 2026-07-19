@@ -2,8 +2,5 @@ node_modules
 .env
 .env.local
 
-# local-only dev deploy config, not used in prod
-docker-compose.yml
-
 # agent documentation, local-only
 CLAUDE.md
