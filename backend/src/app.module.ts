@@ -28,8 +28,8 @@ import { ReportsModule } from './reports/reports.module';
 import { CustomersModule } from './customers/customers.module';
 import { ImeiTrackerModule } from './imei-tracker/imei-tracker.module';
 import { ServiceOrdersModule } from "./service-orders/service-orders.module";
-import { NcfModule } from './ncf/ncf.module';
 import { SubscriptionModule } from './subscription/subscription.module';
+import { EcfModule } from './ecf/ecf.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
@@ -107,7 +107,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
 
     ServiceOrdersModule,
 
-    NcfModule,
+    EcfModule,
 
     SubscriptionModule,
 

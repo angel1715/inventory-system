@@ -8,6 +8,7 @@ import { getCustomers } from "@/lib/api";
 interface Customer {
   id: string;
   name: string;
+  taxId?: string | null;
   creditAccount?: {
     id: string;
     balance: number;
@@ -16,7 +17,7 @@ interface Customer {
 }
 
 interface CustomerSelectorProps {
-  onSelectCustomer: (customerId: string) => void;
+  onSelectCustomer: (customerId: string, customer?: Customer) => void;
   selectedCustomerId: string;
 }
 
@@ -67,7 +68,10 @@ export default function CustomerSelector({
       </label>
       <select
         value={selectedCustomerId}
-        onChange={(e) => onSelectCustomer(e.target.value)}
+        onChange={(e) => {
+          const customer = customers.find((c) => c.id === e.target.value);
+          onSelectCustomer(e.target.value, customer);
+        }}
         className="w-full p-2.5 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-800 text-sm outline-none transition-all"
       >
         <option value="">-- Seleccione un cliente para el crédito --</option>

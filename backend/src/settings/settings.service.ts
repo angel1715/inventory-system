@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from "@nestjs/comm
 import { PrismaService } from "../prisma/prisma.service";
 import { Prisma } from "@prisma/client";
 import { UpdateSettingsDto } from "./dto/create-settings.dto"; // Asegúrate de tener este DTO
+import { UpdateNcfSequenceDto } from "./dto/update-ncf-sequence.dto";
 
 @Injectable()
 export class SettingsService {
@@ -72,8 +73,39 @@ export class SettingsService {
         return await this.prisma.ncfSequence.create({
             data: {
                 ...cleanData,
+                current: cleanData.current ?? cleanData.startAt,
                 businessId
             }
+        });
+    }
+
+    async updateSequence(id: string, businessId: string, data: UpdateNcfSequenceDto) {
+        const sequence = await this.prisma.ncfSequence.findFirst({ where: { id, businessId } });
+        if (!sequence) throw new NotFoundException("Secuencia no encontrada");
+
+        const nextEndAt = data.endAt ?? sequence.endAt;
+        const nextCurrent = data.current ?? sequence.current;
+
+        if (nextCurrent < sequence.startAt) {
+            throw new BadRequestException("El número actual no puede ser menor que el inicio del rango.");
+        }
+        if (nextCurrent > nextEndAt + 1) {
+            throw new BadRequestException("El número actual no puede superar el fin del rango.");
+        }
+        if (nextEndAt < sequence.startAt) {
+            throw new BadRequestException("El fin del rango no puede ser menor que el inicio.");
+        }
+        if (data.expiryDate && new Date(data.expiryDate) < new Date()) {
+            throw new BadRequestException("La fecha de vencimiento no puede estar en el pasado.");
+        }
+
+        return await this.prisma.ncfSequence.update({
+            where: { id },
+            data: {
+                ...(data.current !== undefined && { current: data.current }),
+                ...(data.endAt !== undefined && { endAt: data.endAt }),
+                ...(data.expiryDate !== undefined && { expiryDate: new Date(data.expiryDate) }),
+            },
         });
     }
 

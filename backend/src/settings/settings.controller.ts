@@ -13,6 +13,7 @@ import { SettingsService } from "./settings.service";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { Roles } from "../auth/roles.decorator";
 import { UpdateSettingsDto } from "./dto/create-settings.dto";
+import { UpdateNcfSequenceDto } from "./dto/update-ncf-sequence.dto";
 import { Prisma } from "@prisma/client";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
 
@@ -46,6 +47,11 @@ export class SettingsController {
   @Post("sequences")
   createSequence(@Request() req: any, @Body() body: Prisma.NcfSequenceUncheckedCreateInput) {
     return this.settingsService.createSequence(req.user.businessId, body);
+  }
+
+  @Patch("sequences/:id")
+  updateSequence(@Request() req: any, @Param("id") id: string, @Body() body: UpdateNcfSequenceDto) {
+    return this.settingsService.updateSequence(id, req.user.businessId, body);
   }
 
   @Patch("sequences/:id/activate")

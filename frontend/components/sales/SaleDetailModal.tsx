@@ -1,12 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Receipt from "@/components/Receipt";
+import EcfStatusCard from "@/components/EcfStatusCard";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import toast from "react-hot-toast";
 
 export default function SaleDetailModal({ open, sale, onClose }: any) {
-  if (!open || !sale) return null;
+  const [currentSale, setCurrentSale] = useState(sale);
+
+  useEffect(() => {
+    setCurrentSale(sale);
+  }, [sale]);
+
+  if (!open || !currentSale) return null;
 
   // =========================
   // PRINT (CLEAN + RELIABLE)
@@ -128,7 +136,7 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
 
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
 
-    pdf.save(`${sale.invoiceNumber}.pdf`);
+    pdf.save(`${currentSale.invoiceNumber}.pdf`);
   }
 
   return (
@@ -139,8 +147,8 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
           <div>
             <h2 className="text-3xl font-bold text-gray-900">Invoice</h2>
             <p className="text-sm text-gray-500 mt-2">Inventory System POS</p>
-            <p className="text-gray-500 mt-1">{sale.invoiceNumber}</p>
-            <p className="text-xs text-gray-400 mt-1">ID Venta: {sale.id}</p>
+            <p className="text-gray-500 mt-1">{currentSale.invoiceNumber}</p>
+            <p className="text-xs text-gray-400 mt-1">ID Venta: {currentSale.id}</p>
           </div>
 
           <button
@@ -153,33 +161,39 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
 
         {/* CONTENT */}
         <div id="invoice-content" className="p-6">
+          {currentSale.ncfType?.startsWith("E") && (
+            <div className="mb-6 flex justify-center">
+              <EcfStatusCard sale={currentSale} onUpdated={setCurrentSale} />
+            </div>
+          )}
+
           {/* INFO CARDS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div className="bg-gray-100 rounded-2xl p-4">
               <p className="text-sm text-gray-500">Metodo de pago</p>
               <h3 className="text-gray-600 font-bold text-lg mt-1">
-                {sale.paymentMethod}
+                {currentSale.paymentMethod}
               </h3>
             </div>
 
             <div className="bg-gray-100 rounded-2xl p-4">
               <p className="text-sm text-gray-500">Fecha</p>
               <h3 className="text-gray-600 font-bold mt-1">
-                {new Date(sale.createdAt).toLocaleString()}
+                {new Date(currentSale.createdAt).toLocaleString()}
               </h3>
             </div>
 
             <div className="bg-gray-100 rounded-2xl p-4">
               <p className="text-sm text-gray-500">Cajero</p>
               <h3 className="text-gray-600 font-bold mt-1">
-                {sale.createdBy?.name || "Unknown"}
+                {currentSale.createdBy?.name || "Unknown"}
               </h3>
             </div>
           </div>
 
           {/* ITEMS */}
           <div className="space-y-4 mb-8">
-            {sale.items.map((item: any) => (
+            {currentSale.items.map((item: any) => (
               <div
                 key={item.id}
                 className="border rounded-2xl p-4 flex justify-between"
@@ -213,22 +227,22 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
             <div className="space-y-3">
               <div className="flex justify-between">
                 <p className="opacity-70">Subtotal</p>
-                <p>RD${Number(sale.subtotal).toFixed(2)}</p>
+                <p>RD${Number(currentSale.subtotal).toFixed(2)}</p>
               </div>
 
               <div className="flex justify-between">
                 <p className="opacity-70">Impuesto</p>
-                <p>RD${Number(sale.tax).toFixed(2)}</p>
+                <p>RD${Number(currentSale.tax).toFixed(2)}</p>
               </div>
 
               <div className="flex justify-between">
                 <p className="opacity-70">Descuento</p>
-                <p>RD${Number(sale.discount).toFixed(2)}</p>
+                <p>RD${Number(currentSale.discount).toFixed(2)}</p>
               </div>
 
               <div className="border-t border-white/20 pt-4 flex justify-between">
                 <h2 className="text-3xl font-bold">
-                  RD${Number(sale.total).toFixed(2)}
+                  RD${Number(currentSale.total).toFixed(2)}
                 </h2>
               </div>
             </div>
@@ -255,7 +269,7 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
         {/* HIDDEN RECEIPT (IMPORTANT FIX) */}
         <div className="hidden">
           <div id="receipt">
-            <Receipt sale={sale} />
+            <Receipt sale={currentSale} />
           </div>
         </div>
       </div>

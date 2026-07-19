@@ -299,6 +299,7 @@ export default function POSPage() {
         customTotal: data.customTotal,
         customerId: data.customerId,
         initialPayment: data.initialPayment,
+        ncfType: data.ncfType,
         // 🔥 LÓGICA DE FLATMAP PARA PROCESAR SERIALES INDIVIDUALMENTE
         items: cart.flatMap((item) => {
           if (item.selectedSerials && item.selectedSerials.length > 0) {
@@ -321,6 +322,14 @@ export default function POSPage() {
       };
 
       const sale = await createSale(payload);
+
+      if (sale.ncfType?.startsWith("E") && sale.ecfStatus === "failure") {
+        toast.error(
+          `La venta se registró, pero la DGII rechazó el comprobante: ${sale.ecfMessage || "Error desconocido"}`,
+          { duration: 8000 },
+        );
+      }
+
       setCompletedSale(sale);
       sessionStorage.setItem("lastSaleId", sale.id);
       setCart([]);

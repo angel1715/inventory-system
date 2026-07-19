@@ -7,7 +7,7 @@ async function main() {
     // =========================
     // 1. GET OR CREATE BUSINESS
     // =========================
-    let business = await prisma.business.findFirst({ where: { slug: "my-store" } });
+    let business = await prisma.business.findFirst({ where: { slug: "OGAdmin" } });
 
     if (!business) {
         business = await prisma.business.create({

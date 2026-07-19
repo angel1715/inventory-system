@@ -4,6 +4,7 @@ import { X, Printer, Download } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import Receipt from "../Receipt";
+import EcfStatusCard from "../EcfStatusCard";
 
 type Props = {
   open: boolean;
@@ -20,6 +21,11 @@ export default function ReceiptModal({
 }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [processing, setProcessing] = useState(false);
+  const [currentSale, setCurrentSale] = useState(sale);
+
+  useEffect(() => {
+    setCurrentSale(sale);
+  }, [sale]);
 
   function handlePrint() {
     const ticket = receiptRef.current;
@@ -96,9 +102,10 @@ export default function ReceiptModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 flex justify-center">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 flex flex-col items-center">
+          <EcfStatusCard sale={currentSale} onUpdated={setCurrentSale} />
           <div ref={receiptRef}>
-            <Receipt sale={sale} />
+            <Receipt sale={currentSale} />
           </div>
         </div>
 
