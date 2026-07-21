@@ -11,15 +11,13 @@ import { JwtService } from "@nestjs/jwt";
 import * as crypto from "crypto";
 import { EmailService } from "../email/email.service";
 import { RegisterDto } from "./dto/register.dto";
-import { SubscriptionService } from "../subscription/subscription.service";
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private emailService: EmailService,
-    private subscriptionService: SubscriptionService
+    private emailService: EmailService
   ) { }
 
   async register(data: RegisterDto) {
@@ -45,7 +43,7 @@ export class AuthService {
         data: { used: true }
       });
 
-      // 4. Crear el negocio (CORREGIDO: usando tx en vez de this.prisma)
+      // 4. Crear el negocio
       const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
       const business = await tx.business.create({
         data: {
@@ -73,7 +71,7 @@ export class AuthService {
         },
       });
 
-      // 7. Crear el Trial automáticamente de 14 días
+      // 7. Crear el Trial automáticamente de 14 días (Directo con tx)
       const trialExpiry = new Date();
       trialExpiry.setDate(trialExpiry.getDate() + 14);
 
@@ -107,7 +105,6 @@ export class AuthService {
     });
   }
 
-  // En auth.service.ts - Método login
   async login(email: string, password: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({
@@ -129,11 +126,10 @@ export class AuthService {
     const subscription = user.business?.subscription ??
       await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
 
-    // Lógica dinámica para el estado de la suscripción
     const now = new Date();
     const isActive = subscription && (
       subscription.accessType === 'LIFETIME' ||
-      (subscription.currentPeriodEnd > now)
+      (subscription.currentPeriodEnd > now && subscription.subscriptionStatus === 'ACTIVE')
     );
 
     const token = await this.jwtService.signAsync({
@@ -147,6 +143,79 @@ export class AuthService {
         businessId: user.businessId,
         subscriptionStatus: isActive ? "ACTIVE" : "CANCELED",
       },
+    };
+  }
+
+  async validateInvitationToken(token: string) {
+    const invitation = await this.prisma.invitation.findFirst({
+      where: {
+        token,
+        used: false,
+        expiresAt: { gt: new Date() }
+      }
+    });
+
+    if (!invitation) {
+      throw new NotFoundException("Invitación inválida o expirada");
+    }
+    return { valid: true };
+  }
+
+  async generateInvitation(currentUser: any) {
+    if (currentUser.role !== "ADMIN") {
+      throw new ForbiddenException("No tienes permisos de administrador");
+    }
+
+    const token = crypto.randomBytes(16).toString('hex');
+    return await this.prisma.invitation.create({
+      data: {
+        token,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
+
+  async getInvitations(currentUser: any) {
+    if (currentUser.role !== "ADMIN") {
+      throw new ForbiddenException("No tienes permisos de administrador");
+    }
+
+    return await this.prisma.invitation.findMany({
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async getUserProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        business: {
+          include: { subscription: true }
+        }
+      }
+    });
+
+    if (!user) throw new NotFoundException("Usuario no encontrado");
+
+    const subscription = user.business?.subscription
+      ?? await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
+
+    const now = new Date();
+    const isLifetime = subscription?.accessType === 'LIFETIME';
+    const isWithinDate = subscription ? subscription.currentPeriodEnd > now : false;
+    const isStatusActive = subscription?.subscriptionStatus === 'ACTIVE';
+
+    const isActive = subscription && (isLifetime || (isWithinDate && isStatusActive));
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      businessId: user.businessId,
+      active: user.active,
+      subscriptionStatus: isActive ? "ACTIVE" : "CANCELED",
+      subscription: subscription
     };
   }
 

@@ -5,10 +5,8 @@ import {
   Get,
   UseGuards,
   Request,
-  NotFoundException,
   HttpCode,
   HttpStatus,
-  ForbiddenException,
   Param,
 } from "@nestjs/common";
 
@@ -16,75 +14,38 @@ import { AuthGuard } from "@nestjs/passport";
 import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
-import { PrismaService } from "../prisma/prisma.service";
 import { Throttle } from '@nestjs/throttler';
-import * as crypto from 'crypto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly prisma: PrismaService
-  ) { }
-
-  // Método privado auxiliar para validación de administrador
-  private validateAdmin(user: any) {
-    if (user.role !== "ADMIN") {
-      throw new ForbiddenException("No tienes permisos de administrador");
-    }
-  }
+  constructor(private readonly authService: AuthService) { }
 
   @Post("register")
   async register(@Body() body: RegisterDto) {
-    // El servicio se encarga de validar el token, 
-    // asegurar la transacción y retornar el resultado
     return await this.authService.register(body);
   }
 
   @Throttle({ default: { limit: 3, ttl: 900000 } })
   @Post("login")
   async login(@Body() body: LoginDto) {
-    return this.authService.login(body.email, body.password);
+    return await this.authService.login(body.email, body.password);
   }
 
   @Get("validate-invitation/:token")
   async validateInvitation(@Param("token") token: string) {
-    const invitation = await this.prisma.invitation.findFirst({
-      where: {
-        token,
-        used: false,
-        expiresAt: { gt: new Date() } // Que no haya expirado
-      }
-    });
-
-    if (!invitation) {
-      throw new NotFoundException("Invitación inválida o expirada");
-    }
-    return { valid: true };
+    return await this.authService.validateInvitationToken(token);
   }
 
   @Post("generate-invitation")
   @UseGuards(AuthGuard("jwt"))
   async generateInvitation(@Request() req: any) {
-    this.validateAdmin(req.user);
-
-    const token = crypto.randomBytes(16).toString('hex');
-    return await this.prisma.invitation.create({
-      data: {
-        token,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      }
-    });
+    return await this.authService.generateInvitation(req.user);
   }
 
   @Get("invitations")
   @UseGuards(AuthGuard("jwt"))
   async getInvitations(@Request() req: any) {
-    this.validateAdmin(req.user);
-
-    return await this.prisma.invitation.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    return await this.authService.getInvitations(req.user);
   }
 
   @Throttle({ default: { limit: 3, ttl: 900000 } })
@@ -98,55 +59,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() body: any) {
     const { token, password } = body;
-    try {
-      return await this.authService.resetPassword(token, password);
-    } catch (error: any) {
-      throw error;
-    }
+    return await this.authService.resetPassword(token, password);
   }
 
-  // En auth.controller.ts - Método me
   @Get("me")
   @UseGuards(AuthGuard("jwt"))
   async me(@Request() req: any) {
     const userId = req.user?.sub || req.user?.id;
-
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        business: {
-          include: { subscription: true }
-        }
-      }
-    });
-
-    if (!user) throw new NotFoundException("Usuario no encontrado");
-
-    const subscription = user.business?.subscription
-      ?? await this.prisma.subscription.findFirst({ where: { businessId: user.businessId! } });
-
-    // Lógica dinámica de suscripción corregida:
-    // 1. Debe tener un registro de suscripción.
-    // 2. O es LIFETIME, o debe estar en fecha y con estado ACTIVE.
-    const now = new Date();
-
-    const isLifetime = subscription?.accessType === 'LIFETIME';
-    const isWithinDate = subscription ? subscription.currentPeriodEnd > now : false;
-    const isStatusActive = subscription?.subscriptionStatus === 'ACTIVE';
-
-    // El usuario solo está activo si es lifetime O (está en fecha Y tiene status activo)
-    const isActive = subscription && (isLifetime || (isWithinDate && isStatusActive));
-
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      businessId: user.businessId,
-      active: user.active,
-      // Ahora enviamos explícitamente CANCELED si no cumple las reglas
-      subscriptionStatus: isActive ? "ACTIVE" : "CANCELED",
-      subscription: subscription
-    };
+    return await this.authService.getUserProfile(userId);
   }
 }
