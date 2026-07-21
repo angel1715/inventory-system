@@ -503,6 +503,54 @@ export const activateSequence = (id: string) =>
     method: "PATCH",
   });
 
+export const createSequence = (data: {
+  type: string;
+  prefix: string;
+  startAt: number;
+  endAt: number;
+  expiryDate: string;
+  active?: boolean;
+}) =>
+  request("/settings/sequences", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const updateSequence = (
+  id: string,
+  data: { current?: number; endAt?: number; expiryDate?: string },
+) =>
+  request(`/settings/sequences/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+
+// =========================
+// ECF (Facturación Electrónica DGII - Conector RutiversoTech)
+// =========================
+
+export const testEcfConnection = () =>
+  request("/ecf/test-connection", { method: "POST" });
+
+export const getEcfTaxes = () => request("/ecf/taxes");
+
+export const sendSaleEcf = (saleId: string) =>
+  request(`/ecf/sales/${saleId}/send`, { method: "POST" });
+
+export const refreshSaleEcf = (saleId: string, live = false) =>
+  request(`/ecf/sales/${saleId}/refresh${live ? "?live=true" : ""}`, {
+    method: "POST",
+  });
+
+export const createCreditNote = (
+  saleId: string,
+  data: { modificationCode: string; baseAmount?: number; reason?: string }
+) =>
+  request(`/ecf/sales/${saleId}/credit-note`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
 // =========================
 // SUBSCRIPTION
 // =========================

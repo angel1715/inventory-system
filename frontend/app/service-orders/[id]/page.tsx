@@ -131,7 +131,14 @@ export default function ServiceOrderDetailPage() {
       // Actualizamos la orden.
       await loadOrder();
 
-      toast.success("Reparación entregada y factura generada correctamente.");
+      if (sale.ncfType?.startsWith("E") && sale.ecfStatus === "failure") {
+        toast.error(
+          `La factura se registró, pero la DGII rechazó el comprobante: ${sale.ecfMessage || "Error desconocido"}`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success("Reparación entregada y factura generada correctamente.");
+      }
     } catch (err: any) {
       console.error(err);
 

@@ -154,6 +154,7 @@ model Business {
   settings           BusinessSettings?
   subscription       Subscription?
   manualPayments     ManualPaymentLog[]
+  creditNotes        CreditNote[]
 }
 
 model BusinessSettings {
@@ -177,6 +178,12 @@ model BusinessSettings {
   // CONFIGURACIONES FISCALES
   useItbis Boolean @default(false)
   useNcf   Boolean @default(false)
+
+  // CONECTOR E-CF (RutiversoTech) - facturacion electronica DGII
+  ecfEnabled Boolean @default(false)
+  ecfApiKey  String?
+  ecfBaseUrl String?
+  ecfTaxId   Int?
 
   invoiceFooter String?
 
@@ -481,10 +488,40 @@ model NcfSequence {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  business Business @relation("BusinessNcf", fields: [businessId], references: [id], onDelete: Restrict)
-  sales    Sale[]
+  business    Business     @relation("BusinessNcf", fields: [businessId], references: [id], onDelete: Restrict)
+  sales       Sale[]
+  creditNotes CreditNote[]
 
   @@index([businessId, type, active])
+}
+
+model CreditNote {
+  id               String       @id @default(cuid())
+  businessId       String
+  business         Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  saleId           String
+  sale             Sale         @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  ncf              String
+  ncfType          String
+  ncfSequenceId    String?
+  ncfSequence      NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
+  modificationCode String
+  baseAmount       Decimal
+  taxAmount        Decimal?
+  totalAmount      Decimal
+  reason           String?
+
+  // CONECTOR E-CF (RutiversoTech) - estado del envio a DGII
+  ecfStatus    String?
+  ecfInvoiceId Int?
+  ecfQrLink    String?
+  ecfMessage   String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId])
+  @@index([saleId])
 }
 
 model CashMovement {
@@ -510,6 +547,13 @@ model Sale {
   ncfType       String?
   ncfSequenceId String?
   ncfSequence   NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
+
+  // CONECTOR E-CF (RutiversoTech) - estado del envio a DGII
+  ecfStatus    String?
+  ecfInvoiceId Int?
+  ecfQrLink    String?
+  ecfMessage   String?
+  creditNotes  CreditNote[]
 
   subtotal      Decimal
   tax           Decimal

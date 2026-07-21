@@ -5,6 +5,8 @@ import {
   updateSettings,
   getSequences,
   activateSequence,
+  testEcfConnection,
+  getEcfTaxes,
 } from "@/lib/api";
 
 import { useEffect, useState } from "react";
@@ -17,6 +19,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [sequences, setSequences] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSequence, setEditingSequence] = useState<any>(null);
+  const [ecfTesting, setEcfTesting] = useState(false);
+  const [ecfConnection, setEcfConnection] = useState<{ client_name?: string; state?: string } | null>(null);
+  const [ecfTaxes, setEcfTaxes] = useState<{ id: number; name: string; amount: number }[]>([]);
 
   const [form, setForm] = useState({
     businessName: "",
@@ -36,6 +42,10 @@ export default function SettingsPage() {
     invoiceFooter: "",
     useItbis: false,
     useNcf: false,
+    ecfEnabled: false,
+    ecfApiKey: "",
+    ecfBaseUrl: "",
+    ecfTaxId: null as number | null,
   });
 
   async function load() {
@@ -59,9 +69,30 @@ export default function SettingsPage() {
         invoiceFooter: data.invoiceFooter || "",
         useItbis: data.useItbis ?? false,
         useNcf: data.useNcf ?? false,
+        ecfEnabled: data.ecfEnabled ?? false,
+        ecfApiKey: data.ecfApiKey || "",
+        ecfBaseUrl: data.ecfBaseUrl || "",
+        ecfTaxId: data.ecfTaxId ?? null,
       });
     } catch (err: any) {
       toast.error("Error al cargar la configuración");
+    }
+  }
+
+  async function handleTestEcfConnection() {
+    try {
+      setEcfTesting(true);
+      setEcfConnection(null);
+      const result = await testEcfConnection();
+      setEcfConnection(result);
+      toast.success(`Conectado: ${result.client_name} (${result.state})`);
+
+      const taxes = await getEcfTaxes();
+      setEcfTaxes(taxes || []);
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo conectar con el conector e-CF");
+    } finally {
+      setEcfTesting(false);
     }
   }
 
@@ -331,6 +362,95 @@ export default function SettingsPage() {
             </div>
           </div>
 
+          {/* BLOQUE 1.5: FACTURACIÓN ELECTRÓNICA (e-CF / DGII) */}
+          {form.useNcf && (
+            <div className="bg-white rounded-3xl border p-8 shadow-sm">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Facturación Electrónica (e-CF)
+                </h2>
+                <p className="text-gray-500 mt-2">
+                  Conecta con el conector e-CF de RutiversoTech para firmar y
+                  enviar tus comprobantes fiscales electrónicos a la DGII.
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-5">
+                <div className="md:col-span-2 flex items-center justify-between border rounded-2xl p-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-800">
+                      Activar conector e-CF
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Cuando está activo, las ventas con NCF electrónico (serie
+                      E) se envían automáticamente a la DGII.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={form.ecfEnabled}
+                    onChange={(e) => handleChange("ecfEnabled", e.target.checked)}
+                  />
+                </div>
+
+                <input
+                  value={form.ecfBaseUrl}
+                  onChange={(e) => handleChange("ecfBaseUrl", e.target.value)}
+                  placeholder="URL del conector (ej: https://tuconector.rutiversotech.com)"
+                  className="text-gray-700 md:col-span-2 w-full border rounded-2xl p-4 outline-none focus:ring-2 focus:ring-black"
+                />
+                <input
+                  type="password"
+                  value={form.ecfApiKey}
+                  onChange={(e) => handleChange("ecfApiKey", e.target.value)}
+                  placeholder="API Key (ECF-...)"
+                  className="text-gray-700 md:col-span-2 w-full border rounded-2xl p-4 outline-none focus:ring-2 focus:ring-black"
+                />
+
+                <div className="md:col-span-2 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={handleTestEcfConnection}
+                    disabled={ecfTesting || !form.ecfApiKey || !form.ecfBaseUrl}
+                    className="px-4 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold disabled:opacity-50"
+                  >
+                    {ecfTesting ? "Probando..." : "Probar conexión"}
+                  </button>
+                  {ecfConnection && (
+                    <span className="text-sm text-gray-600">
+                      {ecfConnection.client_name} — estado: {ecfConnection.state}
+                    </span>
+                  )}
+                </div>
+
+                {ecfTaxes.length > 0 && (
+                  <div className="md:col-span-2">
+                    <label className="block mb-2 font-medium text-gray-700">
+                      Impuesto ITBIS (conector)
+                    </label>
+                    <select
+                      value={form.ecfTaxId ?? ""}
+                      onChange={(e) =>
+                        handleChange(
+                          "ecfTaxId",
+                          e.target.value ? Number(e.target.value) : null
+                        )
+                      }
+                      className="text-gray-700 w-full border rounded-2xl p-4 outline-none focus:ring-2 focus:ring-black"
+                    >
+                      <option value="">Selecciona el impuesto...</option>
+                      {ecfTaxes.map((tax) => (
+                        <option key={tax.id} value={tax.id}>
+                          {tax.name} ({tax.amount}%)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* BLOQUE 2: SECUENCIAS FISCALES */}
           {form.useNcf && (
             <div className="bg-white rounded-3xl border p-8 shadow-sm">
@@ -340,7 +460,10 @@ export default function SettingsPage() {
                 </h2>
 
                 <button
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => {
+                    setEditingSequence(null);
+                    setIsModalOpen(true);
+                  }}
                   className="bg-black text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-800"
                 >
                   + Nueva Secuencia
@@ -389,6 +512,17 @@ export default function SettingsPage() {
                             Activar
                           </button>
                         )}
+
+                        <button
+                          onClick={() => {
+                            setEditingSequence(seq);
+                            setIsModalOpen(true);
+                          }}
+                          disabled={loading}
+                          className="text-blue-600 font-semibold underline hover:text-blue-800 disabled:opacity-50"
+                        >
+                          Editar
+                        </button>
                       </div>
                     </div>
                   ))
@@ -400,10 +534,15 @@ export default function SettingsPage() {
 
         <NewSequenceModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          sequence={editingSequence}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingSequence(null);
+          }}
           onCreated={() => {
             loadSequences();
             setIsModalOpen(false);
+            setEditingSequence(null);
           }}
         />
       </div>

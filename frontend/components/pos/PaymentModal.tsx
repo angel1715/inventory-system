@@ -3,6 +3,14 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 import CustomerSelector from "@/components/CustomerSelector";
+import { useSettings } from "@/hooks/useSettings";
+
+const NCF_OPTIONS = [
+  { value: "B02", label: "B02 - Consumidor Final" },
+  { value: "B01", label: "B01 - Crédito Fiscal" },
+  { value: "E32", label: "E32 - Consumo Electrónico" },
+  { value: "E31", label: "E31 - Crédito Fiscal Electrónico" },
+];
 
 type Props = {
   open: boolean;
@@ -15,6 +23,7 @@ type Props = {
     customTotal: number;
     customerId?: string;
     initialPayment?: number; // 🚀 RECONFIGURADO: Añadido al tipado de confirmación
+    ncfType?: string;
   }) => Promise<void>;
   loading?: boolean;
 };
@@ -25,13 +34,18 @@ export default function PaymentModal({
   total,
   onConfirm,
 }: Props) {
+  const { settings } = useSettings();
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [received, setReceived] = useState("");
   const [customTotal, setCustomTotal] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [selectedCustomerTaxId, setSelectedCustomerTaxId] = useState<string | null | undefined>(null);
   const [initialPayment, setInitialPayment] = useState(""); // 🚀 NUEVO: Controla el input del inicial en string
+  const [ncfType, setNcfType] = useState("B02");
+
+  const requiresRnc = ncfType === "B01" || ncfType === "E31";
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -45,9 +59,11 @@ export default function PaymentModal({
     setReceived("");
     setCustomTotal(total.toFixed(2));
     setSelectedCustomerId("");
+    setSelectedCustomerTaxId(null);
     setInitialPayment(""); // 🚀 Reseteamos el inicial al abrir
+    setNcfType(settings?.ecfEnabled ? "E32" : "B02");
     setLoading(false);
-  }, [open, total]);
+  }, [open, total, settings?.ecfEnabled]);
 
   // =========================
   // AUTOFOCUS
@@ -171,6 +187,24 @@ export default function PaymentModal({
         }
       }
 
+      // ==========================================
+      // VALIDACIÓN: NCF DE CRÉDITO FISCAL (B01 / E31) EXIGE RNC
+      // ==========================================
+      if (requiresRnc) {
+        if (!selectedCustomerId) {
+          toast.error(
+            "Para Crédito Fiscal (B01/E31) es obligatorio seleccionar un cliente con RNC.",
+          );
+          return;
+        }
+        if (!selectedCustomerTaxId) {
+          toast.error(
+            "El cliente seleccionado no tiene RNC registrado; es obligatorio para Crédito Fiscal.",
+          );
+          return;
+        }
+      }
+
       setLoading(true);
 
       await onConfirm({
@@ -180,8 +214,12 @@ export default function PaymentModal({
           paymentMethod === "CREDIT" ? initialPaymentNumber : receivedNumber,
         change: paymentMethod === "CREDIT" ? 0 : change,
         customTotal: finalTotal,
-        customerId: paymentMethod === "CREDIT" ? selectedCustomerId : undefined,
+        customerId:
+          paymentMethod === "CREDIT" || requiresRnc
+            ? selectedCustomerId
+            : undefined,
         initialPayment: paymentMethod === "CREDIT" ? initialPaymentNumber : 0, // 🚀 SE ENVÍA EL MONTO AL POS INTERNO
+        ncfType: settings?.useNcf ? ncfType : undefined,
       });
 
       onClose();
@@ -235,6 +273,27 @@ export default function PaymentModal({
           />
         </div>
 
+        {/* TIPO DE NCF */}
+        {settings?.useNcf && (
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-500 mb-2">
+              Tipo de NCF
+            </label>
+            <select
+              value={ncfType}
+              disabled={loading}
+              onChange={(e) => setNcfType(e.target.value)}
+              className="w-full border border-gray-200 rounded-2xl p-4 text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {NCF_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* METHODS GRID */}
         <div className="grid grid-cols-2 gap-3 mb-6">
           {["CASH", "CARD", "TRANSFER", "CREDIT"].map((method) => (
@@ -244,8 +303,11 @@ export default function PaymentModal({
               onClick={() => {
                 setPaymentMethod(method);
                 if (method !== "CREDIT") {
-                  setSelectedCustomerId("");
                   setInitialPayment(""); // Reseteamos inicial si sale de Crédito
+                  if (!requiresRnc) {
+                    setSelectedCustomerId("");
+                    setSelectedCustomerTaxId(null);
+                  }
                 }
               }}
               className={`p-4 rounded-2xl border font-bold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${
@@ -270,7 +332,10 @@ export default function PaymentModal({
               </label>
               <CustomerSelector
                 selectedCustomerId={selectedCustomerId}
-                onSelectCustomer={setSelectedCustomerId}
+                onSelectCustomer={(id, customer) => {
+                  setSelectedCustomerId(id);
+                  setSelectedCustomerTaxId(customer?.taxId);
+                }}
               />
             </div>
 
@@ -309,6 +374,27 @@ export default function PaymentModal({
                 })}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* CLIENTE CON RNC (requerido para Crédito Fiscal B01/E31, fuera del flujo de CREDIT) */}
+        {requiresRnc && paymentMethod !== "CREDIT" && (
+          <div className="mb-6 p-4 bg-amber-50/60 border border-amber-100 rounded-2xl animate-in fade-in zoom-in-95 duration-150">
+            <label className="text-xs font-bold text-amber-900 uppercase tracking-wider block mb-2">
+              Cliente con RNC (obligatorio para {ncfType})
+            </label>
+            <CustomerSelector
+              selectedCustomerId={selectedCustomerId}
+              onSelectCustomer={(id, customer) => {
+                setSelectedCustomerId(id);
+                setSelectedCustomerTaxId(customer?.taxId);
+              }}
+            />
+            {selectedCustomerId && !selectedCustomerTaxId && (
+              <p className="text-xs text-red-600 font-semibold mt-2">
+                Este cliente no tiene RNC registrado.
+              </p>
+            )}
           </div>
         )}
 

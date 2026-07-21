@@ -1,10 +1,26 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { useSettings } from "@/hooks/useSettings";
 
 export default function Receipt({ sale }: any) {
   const { settings } = useSettings();
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  const ecfQrLink = sale?.ecfQrLink;
+
+  useEffect(() => {
+    if (!ecfQrLink) {
+      setQrDataUrl(null);
+      return;
+    }
+    // qr_link es la URL de verificación del e-CF ante la DGII (no una imagen ya
+    // generada) — hay que codificarla en un QR nosotros mismos para imprimirla.
+    QRCode.toDataURL(ecfQrLink, { width: 160, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [ecfQrLink]);
 
   if (!sale) return null;
 
@@ -79,9 +95,23 @@ export default function Receipt({ sale }: any) {
         </p>
       </div>
 
+      {/* E-CF: QR de verificación DGII, generado a partir del qr_link del conector (elegible para impresión) */}
+      {qrDataUrl && sale.ecfStatus && sale.ecfStatus !== "failure" && (
+        <div className="text-center mt-4">
+          <img
+            src={qrDataUrl}
+            alt="QR e-CF"
+            className="w-24 h-24 mx-auto"
+          />
+          <p className="mt-1 text-[9px]">
+            Comprobante Fiscal Electrónico ({sale.ncfType})
+          </p>
+        </div>
+      )}
+
       {/* PIE */}
       <div className="text-center mt-6 text-[10px]">
-        
+
         <p className="mt-1">{settings?.invoiceFooter || "Sistema CHALTECH"}</p>
       </div>
     </div>

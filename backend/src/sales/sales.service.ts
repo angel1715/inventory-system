@@ -6,9 +6,11 @@ import {
 } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service";
-import { Prisma, PaymentMethod, ServiceStatus, NcfType } from "@prisma/client";
+import { Prisma, PaymentMethod, ServiceStatus } from "@prisma/client";
 import { CreateSaleDto } from "./dto/create-sale.dto";
 import { randomUUID } from "crypto";
+import { generateAndConsumeNcf } from "../common/ncf.util";
+import { EcfService } from "../ecf/ecf.service";
 
 const round = (num: number | Prisma.Decimal): number => Math.round(Number(num) * 100) / 100;
 const userSelect = {
@@ -24,24 +26,14 @@ interface CreateSaleInput extends CreateSaleDto {
 }
 type DateRange = "TODAY" | "WEEK" | "MONTH" | "ALL";
 
+// B01 (papel) y E31 (electrónica) son Crédito Fiscal: la DGII exige el RNC del
+// comprador para que el receptor pueda usarlo como crédito de ITBIS.
+const RNC_REQUIRED_NCF_TYPES = ["B01", "E31"];
+
 @Injectable()
 export class SalesService {
 
-    constructor(private prisma: PrismaService) { }
-
-    // ==========================================
-    // HELPERS FISCALES Y DE FECHA
-    // ==========================================
-    private async generateAndConsumeNcf(tx: Prisma.TransactionClient, businessId: string, ncfType: string): Promise<string> {
-        const sequence = await tx.ncfSequence.findFirst({ where: { businessId, type: ncfType, active: true } });
-        if (!sequence) throw new BadRequestException(`No hay secuencia fiscal para: ${ncfType}`);
-        if (new Date() > new Date(sequence.expiryDate)) throw new BadRequestException("Rango fiscal vencido.");
-        if (sequence.current > sequence.endAt) throw new BadRequestException("Rango fiscal agotado.");
-
-        const generatedNcf = `${sequence.prefix}${sequence.type.replace(sequence.prefix, "")}${String(sequence.current).padStart(8, "0")}`;
-        await tx.ncfSequence.update({ where: { id: sequence.id }, data: { current: { increment: 1 } } });
-        return generatedNcf;
-    }
+    constructor(private prisma: PrismaService, private ecfService: EcfService) { }
 
     // =========================
     // DATE FILTER HELPER
@@ -59,10 +51,21 @@ export class SalesService {
     // ==========================================
     async createSale(dto: CreateSaleInput, userId: string, businessId: string) {
         if (!userId) throw new BadRequestException("Authenticated user not found");
+
+        if (dto.ncfType && RNC_REQUIRED_NCF_TYPES.includes(dto.ncfType)) {
+            if (!dto.customerId) {
+                throw new BadRequestException("Los comprobantes de Crédito Fiscal requieren seleccionar un cliente con RNC registrado.");
+            }
+            const customer = await this.prisma.customer.findFirst({ where: { id: dto.customerId, businessId } });
+            if (!customer?.taxId) {
+                throw new BadRequestException("El cliente seleccionado no tiene RNC registrado; es obligatorio para Crédito Fiscal.");
+            }
+        }
+
         const idempotencyKey = dto.idempotencyKey ?? randomUUID();
         const initialPayment = round(dto.initialPayment || 0);
 
-        return await this.prisma.$transaction(async (tx) => {
+        const sale = await this.prisma.$transaction(async (tx) => {
             const session = await tx.cashSession.findFirst({ where: { status: "OPEN", businessId } });
             if (!session) throw new BadRequestException("No hay sesión abierta.");
 
@@ -169,13 +172,16 @@ export class SalesService {
             }
 
             let ncf: string | null = null;
+            let ncfSequenceId: string | null = null;
 
             if (useNcf && dto.ncfType) {
-                ncf = await this.generateAndConsumeNcf(
+                const generated = await generateAndConsumeNcf(
                     tx,
                     businessId,
                     dto.ncfType
                 );
+                ncf = generated.ncf;
+                ncfSequenceId = generated.ncfSequenceId;
             }
 
             const subtotalAmount = useTax
@@ -193,6 +199,7 @@ export class SalesService {
 
                     ncf,
                     ncfType: useNcf ? dto.ncfType ?? null : null,
+                    ncfSequenceId,
 
                     subtotal: subtotalAmount,
                     tax: taxAmount,
@@ -204,6 +211,7 @@ export class SalesService {
                     cashSessionId: session.id,
                     createdById: userId,
                     businessId,
+                    customerId: dto.customerId ?? null,
 
                     serviceOrderId: dto.serviceOrderId ?? null,
 
@@ -316,6 +324,33 @@ export class SalesService {
 
             return sale;
         }, { isolationLevel: "Serializable" });
+
+        // ==========================================
+        // ENVIO A DGII (e-CF) - fuera de la transacción: una llamada externa nunca
+        // debe mantener abierta una transacción Serializable. La venta local ya
+        // quedó confirmada; un fallo del conector no debe revertirla ni fallar
+        // la respuesta al usuario (EcfService ya persiste ecfStatus:'failure').
+        // ==========================================
+        if (sale.ncfType?.startsWith("E")) {
+            try {
+                await this.ecfService.sendSaleInvoice(businessId, sale.id);
+            } catch {
+                // Swallow: ya quedó registrado el fallo en el Sale por EcfService.
+            }
+        }
+
+        return this.prisma.sale.findUnique({
+            where: { id: sale.id },
+            include: {
+                createdBy: {
+                    select: {
+                        id: true,
+                        name: true,
+                        role: true,
+                    },
+                },
+            },
+        });
     }
 
     // =========================

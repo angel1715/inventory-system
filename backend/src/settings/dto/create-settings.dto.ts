@@ -2,6 +2,8 @@ import {
     IsOptional,
     IsString,
     IsNumber,
+    IsBoolean,
+    IsInt,
     Min,
     Max,
 } from "class-validator";
@@ -68,4 +70,28 @@ export class UpdateSettingsDto {
     @IsOptional()
     @IsString()
     invoiceFooter?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    useNcf?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    useItbis?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    ecfEnabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    ecfApiKey?: string;
+
+    @IsOptional()
+    @IsString()
+    ecfBaseUrl?: string;
+
+    @IsOptional()
+    @IsInt()
+    ecfTaxId?: number;
 }
