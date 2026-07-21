@@ -45,13 +45,13 @@ export class AuthService {
         data: { used: true }
       });
 
-      // 4. Crear el negocio
+      // 4. Crear el negocio (CORREGIDO: usando tx en vez de this.prisma)
       const slug = `${data.businessName.trim().toLowerCase().replace(/\s+/g, "-")}-${crypto.randomBytes(4).toString('hex')}`;
-      const business = await this.prisma.business.create({
+      const business = await tx.business.create({
         data: {
           name: data.businessName.trim(),
           slug,
-          email: data.email // <-- ¡TIENES QUE AGREGAR ESTO!
+          email: data.email
         },
       });
 
@@ -73,7 +73,7 @@ export class AuthService {
         },
       });
 
-      // 7. CREAR EL TRIAL AUTOMÁTICAMENTE DE 14 DÍAS
+      // 7. Crear el Trial automáticamente de 14 días
       const trialExpiry = new Date();
       trialExpiry.setDate(trialExpiry.getDate() + 14);
 
@@ -86,7 +86,7 @@ export class AuthService {
         }
       });
 
-      // 7. Generar token JWT
+      // 8. Generar token JWT
       const jwtToken = await this.jwtService.signAsync({
         sub: user.id,
         email: user.email,
@@ -115,7 +115,7 @@ export class AuthService {
       include: {
         business: {
           include: {
-            subscription: true // Ahora funcionará porque la columna ya existe tras el db push
+            subscription: true
           }
         }
       }
@@ -164,18 +164,16 @@ export class AuthService {
       },
     });
 
-    // CORREGIDO: El nombre del método coincide con tu EmailService
     await this.emailService.sendResetPasswordEmail(email, token);
 
     return { message: "Correo enviado" };
   }
 
   async resetPassword(token: string, password: string) {
-    // 1. Buscar el token y verificar expiración
     const resetEntry = await this.prisma.passwordResetToken.findFirst({
       where: {
         token,
-        expiresAt: { gt: new Date() } // Solo tokens no expirados
+        expiresAt: { gt: new Date() }
       },
     });
 
@@ -183,16 +181,13 @@ export class AuthService {
       throw new NotFoundException("Token no válido o expirado");
     }
 
-    // 2. Hashear la nueva contraseña
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 3. Actualizar usuario
     await this.prisma.user.update({
       where: { id: resetEntry.userId },
       data: { password: hashedPassword },
     });
 
-    // 4. Eliminar el token para que no se vuelva a usar
     await this.prisma.passwordResetToken.delete({
       where: { id: resetEntry.id },
     });
