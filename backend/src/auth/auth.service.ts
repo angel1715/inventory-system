@@ -11,13 +11,15 @@ import { JwtService } from "@nestjs/jwt";
 import * as crypto from "crypto";
 import { EmailService } from "../email/email.service";
 import { RegisterDto } from "./dto/register.dto";
+import { SubscriptionService } from "../subscription/subscription.service";
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private emailService: EmailService
+    private emailService: EmailService,
+    private subscriptionService: SubscriptionService
   ) { }
 
   async register(data: RegisterDto) {
@@ -69,6 +71,19 @@ export class AuthService {
           active: true,
           businessId: business.id,
         },
+      });
+
+      // 7. CREAR EL TRIAL AUTOMÁTICAMENTE DE 14 DÍAS
+      const trialExpiry = new Date();
+      trialExpiry.setDate(trialExpiry.getDate() + 14);
+
+      await tx.subscription.create({
+        data: {
+          businessId: business.id,
+          accessType: 'TRIAL',
+          subscriptionStatus: 'ACTIVE',
+          currentPeriodEnd: trialExpiry,
+        }
       });
 
       // 7. Generar token JWT
