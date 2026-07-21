@@ -47,8 +47,10 @@ export class CashController {
             req.user.businessId,
             req.user.id,
             dto.actualCash,
+            dto.note, // ✅ Ahora sí enviamos la nota al servicio
         );
     }
+
 
     // ==========================================
     // ESTADO DE LA SESIÓN EN DESARROLLO
