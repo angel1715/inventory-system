@@ -466,25 +466,40 @@ export class SalesService {
     }
 
     // =========================================================================
-    // MÉTODO AUXILIAR PARA CÁLCULO DE UTILIDAD
+    // MÉTODO UNIFICADO Y PROFESIONAL DE CÁLCULO DE UTILIDAD
     // =========================================================================
-    private calculateProfitForSale(sale: any, payments: any[]): number {
-        const subtotal = Number(sale.subtotal || 0);
-        const costoTotal = sale.items.reduce((c: number, item: any) =>
-            c + (item.quantity * Number(item.product?.costPrice || 0)), 0);
+    private calculateProfitForSale(sale: any, paymentsInRange: any[] = []): number {
+        const subtotalNeto = Number(sale.subtotal || 0);
 
-        const margenTotalVenta = subtotal - costoTotal;
-        const totalVenta = Number(sale.total || 0);
+        // 1. Costo total de los productos/repuestos físicos despachados
+        const productCost = sale.items.reduce((acc: number, item: any) => {
+            const unitCost = Number(item.product?.costPrice || item.costPriceSnapshot || 0);
+            return acc + (item.quantity * unitCost);
+        }, 0);
 
-        if (sale.paymentMethod !== "CREDIT") return margenTotalVenta;
+        // 2. Costo de la mano de obra del técnico (si viene de una orden de reparación)
+        const laborCost = Number(sale.serviceOrder?.laborCost || 0);
 
-        const recaudadoEnRango = payments
-            .filter(p => p.saleId === sale.id)
-            .reduce((acc, p) => acc + Number(p.amount || 0), 0);
+        // Utilidad bruta potencial de esta factura específica
+        const grossProfit = subtotalNeto - productCost - laborCost;
 
-        const ratioCobrado = totalVenta > 0 ? (recaudadoEnRango / totalVenta) : 0;
+        // 3. Ajuste por ventas a crédito (Criterio de Caja)
+        if (sale.paymentMethod === "CREDIT") {
+            const totalVenta = Number(sale.total || 0);
+            if (totalVenta <= 0) return 0;
 
-        return margenTotalVenta * ratioCobrado;
+            // Sumamos los abonos que se hicieron a esta venta específica dentro del periodo evaluado
+            const collectedForThisSale = paymentsInRange
+                .filter(p => p.saleId === sale.id)
+                .reduce((acc, p) => acc + Number(p.amount || 0), 0);
+
+            // La utilidad se realiza de manera proporcional a lo cobrado
+            const collectionRatio = collectedForThisSale / totalVenta;
+            return grossProfit * collectionRatio;
+        }
+
+        // Si es venta al contado, la utilidad se reconoce de inmediato
+        return grossProfit;
     }
 
     private getPaidAmountForSale(sale: any, payments: any[]): number {
@@ -492,6 +507,8 @@ export class SalesService {
             .filter(p => p.saleId === sale.id)
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
     }
+
+
 
     // =========================================================================
     // DASHBOARD OPTIMIZADO - Lógica de Utilidad Real basada en Caja
@@ -503,7 +520,7 @@ export class SalesService {
             const [payments, expenses, totalDebtData] = await Promise.all([
                 this.prisma.creditMovement.findMany({
                     where: { type: "PAYMENT", createdAt: dateFilter, creditAccount: { businessId } },
-                    include: { sale: { include: { items: { include: { product: true } } } } }
+                    include: { sale: { include: { items: { include: { product: true } }, serviceOrder: true } } }
                 }),
                 this.prisma.expense.findMany({ where: { businessId, createdAt: dateFilter } }),
                 this.prisma.creditAccount.aggregate({ where: { businessId }, _sum: { currentDebt: true } }),
@@ -513,34 +530,16 @@ export class SalesService {
                 where: { businessId, createdAt: dateFilter },
                 include: {
                     items: { include: { product: true } },
-                    serviceOrder: true   // ← Necesario para obtener laborCost
+                    serviceOrder: true
                 }
             });
 
             const cashSales = salesInRange.filter(s => s.paymentMethod !== "CREDIT");
             let totalRealProfit = 0;
 
-            for (const sale of cashSales) {
-                const subtotal = Number(sale.subtotal || 0);
-                const cost = sale.items.reduce((c, i) => c + (i.quantity * Number(i.product?.costPrice || 0)), 0);
-
-                // ==========================================
-                // NUEVO: RESTAR MANO DE OBRA DEL TÉCNICO
-                // ==========================================
-                const laborExpense = Number(sale.serviceOrder?.laborCost || 0);
-
-                totalRealProfit += (subtotal - cost - laborExpense);
-            }
-
-            for (const payment of payments) {
-                if (!payment.sale) continue;
-                const sale = payment.sale;
-                const subtotal = Number(sale.subtotal || 0);
-                const cost = sale.items.reduce((c, i) => c + (i.quantity * Number(i.product?.costPrice || 0)), 0);
-                const totalVenta = Number(sale.total || 0);
-                const margenTotalVenta = subtotal - cost;
-                const ratioCobrado = totalVenta > 0 ? (Number(payment.amount) / totalVenta) : 0;
-                totalRealProfit += (margenTotalVenta * ratioCobrado);
+            // 1. Sumar la utilidad de las ventas hechas en el rango (sea contado o crédito inicial)
+            for (const sale of salesInRange) {
+                totalRealProfit += this.calculateProfitForSale(sale, payments);
             }
 
             const salesByDayMap = new Map<string, number>();
@@ -563,10 +562,12 @@ export class SalesService {
                 const method = s.paymentMethod || "CASH";
                 paymentMethodMap.set(method, (paymentMethodMap.get(method) || 0) + Number(s.total));
             });
+
             const totalRecaudado = payments.reduce((acc, p) => acc + Number(p.amount), 0);
             if (totalRecaudado > 0) {
                 paymentMethodMap.set("RECAUDACIÓN", (paymentMethodMap.get("RECAUDACIÓN") || 0) + totalRecaudado);
             }
+
             const paymentMethods = Array.from(paymentMethodMap.entries())
                 .map(([method, total]) => ({ method, total }));
 

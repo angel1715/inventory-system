@@ -361,7 +361,7 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-
+        
         <div className="mt-12 pt-8 border-t border-zinc-200">
           <RoleGuard roles={["OWNER"]}>
             <CashControl session={cash} refresh={() => load(range)} />
