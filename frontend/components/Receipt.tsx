@@ -27,21 +27,34 @@ export default function Receipt({ sale }: any) {
       minimumFractionDigits: 2,
     })}`;
 
-  const items = Array.isArray(sale?.items) ? sale.items : [];
+  // 🔥 Extracción segura de items por si vienen en diferentes formatos del backend
+  const items = Array.isArray(sale?.items)
+    ? sale.items
+    : Array.isArray(sale?.saleItems)
+      ? sale.saleItems
+      : [];
 
-  const formattedDate = new Date(sale.createdAt).toLocaleString("es-DO", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const formattedDate = new Date(sale.createdAt || Date.now()).toLocaleString(
+    "es-DO",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
 
-  // Calcular el total de piezas / unidades sumando los items
+  // 🔥 Conteo seguro de la cantidad total de artículos
   const totalItemsCount = items.reduce(
-    (acc: number, item: any) => acc + Number(item.quantity || 1),
+    (acc: number, item: any) => acc + Number(item.quantity ?? item.qty ?? 1),
     0,
   );
+
+  const subtotal = Number(sale.subtotal ?? sale.subTotal ?? 0);
+  const tax = Number(sale.tax ?? sale.itbis ?? 0);
+  const discount = Number(sale.discount ?? 0);
+  const total = Number(sale.total ?? sale.grandTotal ?? 0);
 
   return (
     <>
@@ -98,7 +111,9 @@ export default function Receipt({ sale }: any) {
         <div className="space-y-1">
           <div className="flex justify-between">
             <span className="text-gray-700">Invoice:</span>
-            <span className="font-bold">{sale.invoiceNumber}</span>
+            <span className="font-bold">
+              {sale.invoiceNumber || sale.id?.slice(0, 10)}
+            </span>
           </div>
           {sale.ncf && (
             <div className="flex justify-between">
@@ -117,7 +132,7 @@ export default function Receipt({ sale }: any) {
                 ? "Efectivo"
                 : sale.paymentMethod === "CREDIT"
                   ? "A Crédito"
-                  : sale.paymentMethod}
+                  : sale.paymentMethod || "Efectivo"}
             </span>
           </div>
           {sale.customer && (
@@ -132,26 +147,42 @@ export default function Receipt({ sale }: any) {
 
         <div className="border-t border-dashed border-gray-400 my-2" />
 
-        {/* ITEMS */}
+        {/* ITEMS / ARTÍCULOS */}
         <div className="space-y-3 mb-3">
-          {items.map((item: any, idx: number) => (
-            <div key={idx} className="flex flex-col">
-              <div className="flex justify-between items-start">
-                <span className="font-bold">
-                  {item.product?.name || item.productName}
-                </span>
-                <span>{formatMoney(item.lineTotal)}</span>
-              </div>
-              <div className="text-gray-600 text-[10px]">
-                {item.quantity} x {Number(item.salePrice).toFixed(2)}
-              </div>
-              {item.serialNumber && (
-                <div className="text-[10px] text-gray-500 font-mono mt-0.5">
-                  IMEI/S: {item.serialNumber}
+          {items.length === 0 ? (
+            <p className="text-center text-gray-500 italic">No hay artículos</p>
+          ) : (
+            items.map((item: any, idx: number) => {
+              const productName =
+                item.product?.name ||
+                item.productName ||
+                item.name ||
+                "Artículo";
+              const quantity = Number(item.quantity ?? item.qty ?? 1);
+              const salePrice = Number(item.salePrice ?? item.price ?? 0);
+              const lineTotal = Number(
+                item.lineTotal ?? item.total ?? quantity * salePrice,
+              );
+              const serial = item.serialNumber || item.imei;
+
+              return (
+                <div key={idx} className="flex flex-col">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold pr-1">{productName}</span>
+                    <span className="shrink-0">{formatMoney(lineTotal)}</span>
+                  </div>
+                  <div className="text-gray-600 text-[10px]">
+                    {quantity} x {salePrice.toFixed(2)}
+                  </div>
+                  {serial && (
+                    <div className="text-[10px] text-gray-500 font-mono mt-0.5">
+                      IMEI/S: {serial}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            })
+          )}
         </div>
 
         <div className="border-t border-dashed border-gray-400 my-2" />
@@ -160,24 +191,29 @@ export default function Receipt({ sale }: any) {
         <div className="space-y-1">
           <div className="flex justify-between">
             <span className="text-gray-700">Subtotal</span>
-            <span>{formatMoney(sale.subtotal)}</span>
+            <span>{formatMoney(subtotal)}</span>
           </div>
-          {Number(sale.tax) > 0 && (
+
+          {/* Se muestra ITBIS si es mayor a 0 */}
+          {tax > 0 && (
             <div className="flex justify-between">
               <span className="text-gray-700">ITBIS</span>
-              <span>{formatMoney(sale.tax)}</span>
+              <span>{formatMoney(tax)}</span>
             </div>
           )}
-          {Number(sale.discount) > 0 && (
+
+          {discount > 0 && (
             <div className="flex justify-between">
               <span className="text-gray-700">Desc</span>
-              <span>-{formatMoney(sale.discount)}</span>
+              <span>-{formatMoney(discount)}</span>
             </div>
           )}
+
           <div className="flex justify-between text-base font-bold border-t border-dashed border-gray-400 pt-1 mt-1 text-black">
             <span>TOTAL</span>
-            <span>{formatMoney(sale.total)}</span>
+            <span>{formatMoney(total)}</span>
           </div>
+
           <div className="flex justify-between text-gray-700 pt-0.5">
             <span>Items</span>
             <span>{totalItemsCount}</span>
