@@ -22,30 +22,33 @@ export default function Receipt({ sale }: any) {
 
   if (!sale) return null;
 
+  // 🔍 Depuración en consola para ver la estructura exacta que llega del backend
+  console.log("Objeto sale recibido en Receipt:", sale);
+
   const formatMoney = (value: any) =>
     `RD$${Number(value ?? 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
     })}`;
 
-  // 🔥 Extracción segura de items por si vienen en diferentes formatos del backend
+  // Búsqueda exhaustiva del arreglo de productos en cualquier propiedad posible
   const items = Array.isArray(sale?.items)
     ? sale.items
     : Array.isArray(sale?.saleItems)
       ? sale.saleItems
-      : [];
+      : Array.isArray(sale?.details)
+        ? sale.details
+        : [];
 
-  const formattedDate = new Date(sale.createdAt || Date.now()).toLocaleString(
-    "es-DO",
-    {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  );
+  const formattedDate = new Date(
+    sale.createdAt || sale.date || Date.now(),
+  ).toLocaleString("es-DO", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-  // 🔥 Conteo seguro de la cantidad total de artículos
   const totalItemsCount = items.reduce(
     (acc: number, item: any) => acc + Number(item.quantity ?? item.qty ?? 1),
     0,
@@ -82,7 +85,7 @@ export default function Receipt({ sale }: any) {
 
       <div
         id="receipt"
-        className="w-[300px] bg-white text-black p-4 font-mono text-[11px] shadow-sm select-none"
+        className="w-[300px] bg-white text-black p-4 font-mono text-[11px] shadow-sm select-none mx-auto"
       >
         {/* LOGO */}
         {settings?.logoUrl && (
@@ -147,19 +150,24 @@ export default function Receipt({ sale }: any) {
 
         <div className="border-t border-dashed border-gray-400 my-2" />
 
-        {/* ITEMS / ARTÍCULOS */}
-        <div className="space-y-3 mb-3">
+        {/* ITEMS / ARTÍCULOS (DOS COLUMNAS: NOMBRE A LA IZQUIERDA, PRECIO A LA DERECHA) */}
+        <div className="space-y-2 mb-3">
           {items.length === 0 ? (
             <p className="text-center text-gray-500 italic">No hay artículos</p>
           ) : (
             items.map((item: any, idx: number) => {
+              // Obtener el nombre del producto de forma robusta sin importar cómo venga estructurado
               const productName =
                 item.product?.name ||
                 item.productName ||
                 item.name ||
+                item.description ||
                 "Artículo";
+
               const quantity = Number(item.quantity ?? item.qty ?? 1);
-              const salePrice = Number(item.salePrice ?? item.price ?? 0);
+              const salePrice = Number(
+                item.salePrice ?? item.price ?? item.unitPrice ?? 0,
+              );
               const lineTotal = Number(
                 item.lineTotal ?? item.total ?? quantity * salePrice,
               );
@@ -172,7 +180,7 @@ export default function Receipt({ sale }: any) {
                     <span className="shrink-0">{formatMoney(lineTotal)}</span>
                   </div>
                   <div className="text-gray-600 text-[10px]">
-                    {quantity} x {salePrice.toFixed(2)}
+                    {quantity} x {formatMoney(salePrice)}
                   </div>
                   {serial && (
                     <div className="text-[10px] text-gray-500 font-mono mt-0.5">
@@ -194,7 +202,7 @@ export default function Receipt({ sale }: any) {
             <span>{formatMoney(subtotal)}</span>
           </div>
 
-          {/* Se muestra ITBIS si es mayor a 0 */}
+          {/* Solo muestra ITBIS si es mayor a 0 */}
           {tax > 0 && (
             <div className="flex justify-between">
               <span className="text-gray-700">ITBIS</span>
@@ -216,7 +224,7 @@ export default function Receipt({ sale }: any) {
 
           <div className="flex justify-between text-gray-700 pt-0.5">
             <span>Items</span>
-            <span>{totalItemsCount}</span>
+            <span>{totalItemsCount || items.length}</span>
           </div>
         </div>
 
