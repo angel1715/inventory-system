@@ -233,8 +233,14 @@ export class SalesService {
                             role: true,
                         },
                     },
+
+                    items: {
+                        include: {
+                            product: true,
+                        },
+                    },
                 },
-            });
+            });;
 
             if (dto.serviceOrderId) {
                 await tx.serviceLog.create({
@@ -349,8 +355,13 @@ export class SalesService {
                         role: true,
                     },
                 },
+                items: {
+                    include: {
+                        product: true,
+                    },
+                },
             },
-        });
+        });;
     }
 
     // =========================
