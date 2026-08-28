@@ -241,7 +241,6 @@ export default function Receipt({ sale }: any) {
         {/* PIE */}
         <div className="text-center mt-6 text-[10px] space-y-0.5">
           <p>{settings?.invoiceFooter || "Gracias por su compra!"}</p>
-          <p className="text-gray-500">Sistema de Facturación CHALTECH</p>
         </div>
       </div>
     </>
