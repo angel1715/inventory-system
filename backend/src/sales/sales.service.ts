@@ -221,6 +221,7 @@ export class SalesService {
                             quantity: i.quantity,
                             salePrice: i.salePrice,
                             lineTotal: round(i.quantity * i.salePrice),
+                            serialNumber: i.serialNumber || null,
                         })),
                     },
                 },
@@ -233,6 +234,9 @@ export class SalesService {
                             role: true,
                         },
                     },
+
+                    customer: true,
+                    serviceOrder: true,
 
                     items: {
                         include: {
@@ -349,19 +353,19 @@ export class SalesService {
             where: { id: sale.id },
             include: {
                 createdBy: {
-                    select: {
-                        id: true,
-                        name: true,
-                        role: true,
-                    },
+                    select: { id: true, name: true, role: true },
                 },
                 items: {
                     include: {
                         product: true,
+                        // Agrega esto si tus items guardan la relación directa con el serial vendido:
+                        // itemSerial: true, 
                     },
                 },
+                serviceOrder: true, // <-- Vital para extraer la mano de obra en el recibo
+                customer: true,
             },
-        });;
+        });
     }
 
     // =========================
@@ -459,6 +463,7 @@ export class SalesService {
                         product: { select: { id: true, name: true, barcode: true } },
                     },
                 },
+                serviceOrder: true, // <-- Incluir aquí también
             },
         });
     }
@@ -471,7 +476,22 @@ export class SalesService {
             where: { id, businessId },
             include: {
                 createdBy: { select: userSelect },
-                items: { include: { product: true } },
+                customer: true, // Datos del cliente (Nombre, RNC, Teléfono)
+                serviceOrder: {
+                    include: {
+                        items: {
+                            include: {
+                                product: true // Repuestos usados en el taller
+                            }
+                        },
+                        technician: { select: { id: true, name: true } } // Opcional: técnico que reparó
+                    }
+                },
+                items: {
+                    include: {
+                        product: true // Productos vendidos en la línea de venta
+                    }
+                },
             },
         });
     }
@@ -519,6 +539,134 @@ export class SalesService {
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
     }
 
+    async getMetrics(businessId: string, startDate?: Date, endDate?: Date) {
+        // Definir rangos por defecto (mes actual si no se envían fechas)
+        const now = new Date();
+        const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        // 1. Obtener todas las ventas completadas en el rango de fechas con sus relaciones reales
+        const sales = await this.prisma.sale.findMany({
+            where: {
+                businessId,
+                createdAt: { gte: start, lte: end },
+            },
+            include: {
+                items: {
+                    include: {
+                        product: true, // Aquí obtenemos el costPrice real del producto
+                    },
+                },
+                serviceOrder: true, // Para extraer la mano de obra si la venta viene de taller
+                customer: {
+                    include: {
+                        creditAccount: {
+                            include: {
+                                movements: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        let totalGrossSales = 0;
+        let totalCogs = 0;         // Costo de inventario (Cost of Goods Sold)
+        let totalLaborCost = 0;    // Mano de obra de técnicos (desde ServiceOrder)
+        let initialCashCollected = 0;
+        let creditIssued = 0;
+        let creditCollectedInPeriod = 0;
+
+        for (const sale of sales) {
+            const saleTotal = Number(sale.total);
+            totalGrossSales += saleTotal;
+
+            // Calcular COGS usando costPrice del producto relacionado al SaleItem
+            for (const item of sale.items) {
+                const itemCost = Number(item.product?.costPrice || 0);
+                totalCogs += itemCost * item.quantity;
+            }
+
+            // Si la venta tiene una orden de servicio asociada, sumar su costo de mano de obra
+            if (sale.serviceOrder) {
+                totalLaborCost += Number(sale.serviceOrder.laborCost || 0);
+            }
+
+            // Determinar ingresos iniciales según el método de pago
+            if (sale.paymentMethod !== 'CREDIT') {
+                initialCashCollected += saleTotal; // Si pagó al contado (CASH, CARD, TRANSFER)
+            } else {
+                creditIssued += saleTotal;
+            }
+
+            // Revisar movimientos de crédito del cliente asociado a esta venta
+            if (sale.customer?.creditAccount?.movements) {
+                for (const mov of sale.customer.creditAccount.movements) {
+                    // Si el abono (PAYMENT) ocurrió dentro del rango y está vinculado a esta venta o en general
+                    if (mov.type === 'PAYMENT' && mov.createdAt >= start && mov.createdAt <= end) {
+                        // Validar si el movimiento corresponde a esta venta o sumar de forma global de la cuenta
+                        if (mov.saleId === sale.id || !mov.saleId) {
+                            creditCollectedInPeriod += Number(mov.amount);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Buscar abonos históricos realizados en este periodo a créditos de ventas de meses anteriores
+        const externalCreditMovements = await this.prisma.creditMovement.findMany({
+            where: {
+                type: 'PAYMENT',
+                createdAt: { gte: start, lte: end },
+                creditAccount: {
+                    businessId,
+                },
+                OR: [
+                    { saleId: { equals: null } },
+                    {
+                        sale: {
+                            createdAt: { lt: start },
+                        },
+                    },
+                ],
+            },
+        });
+
+        let historicalCreditCollected = 0;
+        for (const mov of externalCreditMovements) {
+            historicalCreditCollected += Number(mov.amount);
+        }
+
+        // 3. Totales Financieros bajo Criterio de Caja
+        const totalCashInflow = initialCashCollected + creditCollectedInPeriod + historicalCreditCollected;
+        const totalCosts = totalCogs + totalLaborCost;
+        const grossProfit = totalGrossSales - totalCosts;
+
+        return {
+            period: {
+                start,
+                end,
+            },
+            revenue: {
+                grossSales: totalGrossSales,          // Total vendido en el periodo
+                cashCollected: totalCashInflow,       // Dinero real ingresado a caja
+                creditIssued,                         // Créditos otorgados
+                creditCollected: creditCollectedInPeriod + historicalCreditCollected, // Abonos totales recibidos
+            },
+            costs: {
+                cogs: totalCogs,                      // Costo de inventario vendido
+                laborCost: totalLaborCost,            // Mano de obra de servicios técnicos
+                totalCosts,                           // Costos operativos totales
+            },
+            profitability: {
+                grossProfit,                          // Utilidad bruta
+                profitMargin: totalGrossSales > 0 ? Number(((grossProfit / totalGrossSales) * 100).toFixed(2)) : 0,
+            },
+            totals: {
+                transactionsCount: sales.length,
+            },
+        };
+    }
 
 
     // =========================================================================
@@ -592,6 +740,34 @@ export class SalesService {
                 return acc + Math.max(0, Number(s.total || 0) - pagado);
             }, 0);
 
+            // --- LÓGICA PARA EL TOP DE PRODUCTOS MÁS VENDIDOS (Basada en salesInRange) ---
+            const productMap = new Map<string, { name: string; totalSold: number; revenue: number }>();
+
+            for (const sale of salesInRange) {
+                for (const item of sale.items) {
+                    const productName = item.product?.name || "Artículo sin nombre";
+                    const quantity = Number(item.quantity || 0);
+                    const itemRevenue = Number(item.lineTotal || (quantity * Number(item.salePrice || 0)));
+
+                    if (productMap.has(productName)) {
+                        const current = productMap.get(productName)!;
+                        current.totalSold += quantity;
+                        current.revenue += itemRevenue;
+                    } else {
+                        productMap.set(productName, {
+                            name: productName,
+                            totalSold: quantity,
+                            revenue: itemRevenue,
+                        });
+                    }
+                }
+            }
+
+            const topProducts = Array.from(productMap.values())
+                .sort((a, b) => b.totalSold - a.totalSold)
+                .slice(0, 5);
+            // --------------------------------------------------------------------------
+
             return {
                 revenue: round(totalCashIn),
                 expenses: round(totalExpenses),
@@ -601,7 +777,11 @@ export class SalesService {
                 accountsReceivable: round(totalDebtData._sum.currentDebt || 0),
                 creditPending: round(totalCreditPending),
                 salesByDay,
-                paymentMethods
+                paymentMethods,
+                topProducts: topProducts.map(p => ({
+                    ...p,
+                    revenue: round(p.revenue)
+                }))
             };
         } catch (error) {
             console.error("Error en getDashboard:", error);
@@ -612,16 +792,25 @@ export class SalesService {
     // =========================================================================
     // DASHBOARD STATS (HEADER)
     // =========================================================================
-    async getDashboardStats(businessId: string) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    async getDashboardStats(businessId: string, range: string = 'today') {
+        const startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+
+        // Ajustar la fecha de inicio según el rango recibido
+        if (range === '7days') {
+            startDate.setDate(startDate.getDate() - 7);
+        } else if (range === 'month') {
+            startDate.setDate(1); // Inicio del mes actual
+        } else if (range === 'year') {
+            startDate.setMonth(0, 1); // Inicio del año actual
+        }
 
         const payments = await this.prisma.creditMovement.findMany({
-            where: { type: "PAYMENT", createdAt: { gte: today }, creditAccount: { businessId } }
+            where: { type: "PAYMENT", createdAt: { gte: startDate }, creditAccount: { businessId } }
         });
 
         const sales = await this.prisma.sale.findMany({
-            where: { businessId, createdAt: { gte: today } },
+            where: { businessId, createdAt: { gte: startDate } },
             include: {
                 items: { include: { product: true } },
                 serviceOrder: true
@@ -632,10 +821,41 @@ export class SalesService {
         const cashSales = sales.filter(s => s.paymentMethod !== "CREDIT").reduce((acc, s) => acc + Number(s.total || 0), 0);
         const creditCollections = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
 
+        // --- LÓGICA PARA EL TOP DE PRODUCTOS MÁS VENDIDOS ---
+        const productMap = new Map<string, { name: string; totalSold: number; revenue: number }>();
+
+        for (const sale of sales) {
+            for (const item of sale.items) {
+                const productName = item.product?.name || "Artículo sin nombre";
+                const quantity = Number(item.quantity || 0);
+                const itemRevenue = Number(item.lineTotal || (quantity * Number(item.salePrice || 0)));
+
+                if (productMap.has(productName)) {
+                    const current = productMap.get(productName)!;
+                    current.totalSold += quantity;
+                    current.revenue += itemRevenue;
+                } else {
+                    productMap.set(productName, {
+                        name: productName,
+                        totalSold: quantity,
+                        revenue: itemRevenue,
+                    });
+                }
+            }
+        }
+
+        const topProducts = Array.from(productMap.values())
+            .sort((a, b) => b.totalSold - a.totalSold)
+            .slice(0, 5);
+
         return {
             revenue: round(cashSales + creditCollections),
             profit: round(totalProfit),
             salesCount: sales.length,
+            topProducts: topProducts.map(p => ({
+                ...p,
+                revenue: round(p.revenue)
+            })),
         };
     }
 }

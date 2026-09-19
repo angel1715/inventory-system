@@ -98,11 +98,24 @@ export default function POSPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  const clearCart = useCallback(() => {
+    if (cart.length === 0) return;
+    if (window.confirm("¿Estás seguro de vaciar el carrito actual?")) {
+      setCart([]);
+      localStorage.removeItem("pos-cart");
+      toast.success("Carrito vaciado");
+    }
+  }, [cart.length]);
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "F2") {
         e.preventDefault();
         if (cart.length > 0 && !loading) setPaymentOpen(true);
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        if (cart.length > 0 && !loading) clearCart();
       }
       if (e.key === "Escape") {
         setPaymentOpen(false);
@@ -116,7 +129,7 @@ export default function POSPage() {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cart.length, loading]);
+  }, [cart.length, loading, clearCart]);
 
   function generateIdempotencyKey() {
     return crypto.randomUUID();
@@ -205,7 +218,7 @@ export default function POSPage() {
         }
       }
     },
-    [cart, addToCart],
+    [addToCart],
   );
 
   useBarcodeScanner(handleProductScan);
@@ -267,6 +280,10 @@ export default function POSPage() {
     setCart((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
+  // 🧮 LÓGICA SEGURA DE ITBIS CONDICIONADA A SETTINGS
+  const isTaxEnabled = settings?.useItbis ?? false;
+  const taxRate = isTaxEnabled ? Number(settings?.taxRate ?? 18) : 0;
+
   const subtotal = useMemo(() => {
     return cart.reduce((acc, item) => {
       const price = Number(item.salePrice || 0);
@@ -274,9 +291,13 @@ export default function POSPage() {
     }, 0);
   }, [cart]);
 
-  const taxRate = settings?.taxRate ?? 0; // Si no hay settings o es null, usamos 0
-  const tax = useMemo(() => subtotal * (taxRate / 100), [subtotal, taxRate]);
+  const tax = useMemo(() => {
+    if (!isTaxEnabled || taxRate <= 0) return 0;
+    return subtotal * (taxRate / 100);
+  }, [subtotal, taxRate, isTaxEnabled]);
+
   const total = useMemo(() => subtotal + tax, [subtotal, tax]);
+
   async function handlePayment(data: any) {
     if (isProcessingRef.current) return;
     try {
@@ -300,7 +321,9 @@ export default function POSPage() {
         customerId: data.customerId,
         initialPayment: data.initialPayment,
         ncfType: data.ncfType,
-        // 🔥 LÓGICA DE FLATMAP PARA PROCESAR SERIALES INDIVIDUALMENTE
+        subtotal: subtotal, // <- Asegurar enviar subtotal
+        tax: tax, // <- Asegurar enviar el ITBIS calculado
+        total: total,
         items: cart.flatMap((item) => {
           if (item.selectedSerials && item.selectedSerials.length > 0) {
             return item.selectedSerials.map((serial: string) => ({
@@ -401,11 +424,16 @@ export default function POSPage() {
                 disabled={loading}
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && results.length > 0) {
-                    addToCart(results[0]);
-                    setSearch("");
-                    setResults([]);
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    if (search.trim() && results.length === 0) {
+                      await handleProductScan(search.trim());
+                      setSearch("");
+                    } else if (results.length > 0) {
+                      addToCart(results[0]);
+                      setSearch("");
+                      setResults([]);
+                    }
                   }
                 }}
                 placeholder="Buscar artículo o escanear..."
@@ -428,7 +456,7 @@ export default function POSPage() {
                   )}
                   <img
                     src={product.imageUrl || "/placeholder.png"}
-                    className="text-gray-850 w-full aspect-square object-cover rounded-xl mb-2"
+                    className="w-full aspect-square object-cover rounded-xl mb-2"
                   />
                   <div className="text-xs text-gray-500 mb-1">
                     Stock: {product.stock}
@@ -452,8 +480,17 @@ export default function POSPage() {
 
         {/* RIGHT SIDEBAR (CARRITO) */}
         <div className="w-full xl:w-[430px] bg-white border-l flex flex-col">
-          <div className="p-6 border-b">
+          <div className="p-6 border-b flex justify-between items-center">
             <h2 className="text-gray-700 text-xl font-bold">Venta Actual</h2>
+            {cart.length > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-xs text-red-600 hover:text-red-800 font-semibold flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-xl transition"
+                title="Vaciar carrito (F4)"
+              >
+                <Trash2 size={14} /> Vaciar (F4)
+              </button>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
@@ -521,8 +558,8 @@ export default function POSPage() {
               <span>RD${subtotal.toFixed(2)}</span>
             </div>
 
-            {/* Condición: Solo mostrar si el taxRate es mayor a 0 */}
-            {taxRate > 0 && (
+            {/* ITBIS solo se muestra si está activado y tiene tasa mayor a 0 */}
+            {isTaxEnabled && taxRate > 0 && (
               <div className="flex justify-between text-sm text-gray-600">
                 <span>ITBIS ({taxRate}%)</span>
                 <span>RD${tax.toFixed(2)}</span>

@@ -82,7 +82,6 @@ export default function ReceiptModal({
     printWindow.document.close();
   }
 
-
   useEffect(() => {
     if (open && autoPrint) {
       const timer = setTimeout(handlePrint, 800);
@@ -98,7 +97,7 @@ export default function ReceiptModal({
         <div className="flex justify-between p-4 border-b">
           <h2 className="font-bold text-gray-700">Visualizar Factura</h2>
           <button onClick={onClose}>
-            <X className="w-5 h-5" />
+            <X className="text-red-500 w-5 h-5" />
           </button>
         </div>
 

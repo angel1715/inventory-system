@@ -21,6 +21,8 @@ import { SubscriptionGuard } from "../subscription/subscription.guard";
 export class SalesController {
     constructor(private salesService: SalesService) { }
 
+
+
     // =========================
     // NEW DASHBOARD (MAIN) - Ruta estática arriba
     // =========================
@@ -36,6 +38,22 @@ export class SalesController {
     }
 
     // =========================
+    // FINANCIAL METRICS (Criterio de Caja)
+    // =========================
+    @Get("metrics")
+    async getMetrics(
+        @Request() req,
+        @Query("startDate") startDate?: string,
+        @Query("endDate") endDate?: string,
+    ) {
+        return this.salesService.getMetrics(
+            req.user.businessId,
+            startDate ? new Date(startDate) : undefined,
+            endDate ? new Date(endDate) : undefined,
+        );
+    }
+
+    // =========================
     // LEGACY DASHBOARD - Ruta estática arriba
     // =========================
     @Get("dashboard/stats")
@@ -45,37 +63,37 @@ export class SalesController {
         );
     }
 
-   // =========================
-// SALES LIST - Ruta actualizada
-// =========================
-@Get()
-findAll(
-    @Request() req,
-    @Query("page", new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query("limit", new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query("search", new DefaultValuePipe("")) search: string,
-    // Nuevos parámetros de filtro
-    @Query("paymentMethod", new DefaultValuePipe("ALL")) paymentMethod: string,
-    @Query("dateRange", new DefaultValuePipe("ALL")) dateRange: string,
-) {
-    return this.salesService.findAll(
-        req.user.businessId,
-        page,
-        limit,
-        search,
-        paymentMethod,
-        dateRange,
-    );
-}
+    // =========================
+    // SALES LIST - Ruta actualizada
+    // =========================
+    @Get()
+    findAll(
+        @Request() req,
+        @Query("page", new DefaultValuePipe(1), ParseIntPipe) page: number,
+        @Query("limit", new DefaultValuePipe(10), ParseIntPipe) limit: number,
+        @Query("search", new DefaultValuePipe("")) search: string,
+        // Nuevos parámetros de filtro
+        @Query("paymentMethod", new DefaultValuePipe("ALL")) paymentMethod: string,
+        @Query("dateRange", new DefaultValuePipe("ALL")) dateRange: string,
+    ) {
+        return this.salesService.findAll(
+            req.user.businessId,
+            page,
+            limit,
+            search,
+            paymentMethod,
+            dateRange,
+        );
+    }
 
-@Get('export')
-exportAll(@Request() req, @Query("paymentMethod") paymentMethod: string, @Query("dateRange") dateRange: string) {
-    return this.salesService.exportAll(
-        req.user.businessId,
-        paymentMethod,
-        dateRange
-    );
-}
+    @Get('export')
+    exportAll(@Request() req, @Query("paymentMethod") paymentMethod: string, @Query("dateRange") dateRange: string) {
+        return this.salesService.exportAll(
+            req.user.businessId,
+            paymentMethod,
+            dateRange
+        );
+    }
 
     // =========================
     // CREATE SALE
@@ -113,5 +131,5 @@ exportAll(@Request() req, @Query("paymentMethod") paymentMethod: string, @Query(
             req.user.businessId,
         );
     }
-    
+
 }

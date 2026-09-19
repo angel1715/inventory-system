@@ -99,6 +99,17 @@ export const getDashboard = (range: string) =>
   request(`/sales/dashboard?range=${range}`);
 
 // =========================
+// FINANCIAL METRICS (Criterio de Caja)
+// =========================
+export const getSalesMetrics = (startDate?: string, endDate?: string) => {
+  const params = new URLSearchParams();
+  if (startDate) params.append("startDate", startDate);
+  if (endDate) params.append("endDate", endDate);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request(`/sales/metrics${query}`);
+};
+
+// =========================
 // CASH
 // =========================
 // 🔥 CORREGIDO: Ahora apunta a /cash/summary para heredar expectedCash y totalCreditPayments en el Dashboard

@@ -22,15 +22,11 @@ export default function Receipt({ sale }: any) {
 
   if (!sale) return null;
 
-  // 🔍 Depuración en consola para ver la estructura exacta que llega del backend
-  console.log("Objeto sale recibido en Receipt:", sale);
-
   const formatMoney = (value: any) =>
     `RD$${Number(value ?? 0).toLocaleString(undefined, {
       minimumFractionDigits: 2,
     })}`;
 
-  // Búsqueda exhaustiva del arreglo de productos en cualquier propiedad posible
   const items = Array.isArray(sale?.items)
     ? sale.items
     : Array.isArray(sale?.saleItems)
@@ -61,31 +57,52 @@ export default function Receipt({ sale }: any) {
 
   return (
     <>
-      {/* ESTILOS DE IMPRESIÓN TÉRMICA */}
+      {/* 🖨️ ESTILOS DE IMPRESIÓN TÉRMICA NÍTIDA */}
       <style jsx global>{`
         @media print {
+          /* Ocultar absolutamente todo por defecto */
           body * {
             visibility: hidden;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
+
+          /* Mostrar únicamente el contenedor del recibo */
           #receipt,
           #receipt * {
             visibility: visible;
           }
+
+          /* Reset de página para impresoras térmicas de 80mm / rollos continuos */
+          @page {
+            size: 80mm auto;
+            margin: 0mm;
+          }
+
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: white;
+          }
+
           #receipt {
             position: absolute;
-            left: 0;
-            top: 0;
-            width: 100% !important;
-            margin: 0;
-            padding: 4px;
+            left: 0 !important;
+            top: 0 !important;
+            width: 78mm !important; /* Margen de seguridad para papel de 80mm */
+            max-width: 78mm !important;
+            margin: 0 auto !important;
+            padding: 4px !important;
             box-shadow: none !important;
+            background: white !important;
+            color: black !important;
           }
         }
       `}</style>
 
       <div
         id="receipt"
-        className="w-[300px] bg-white text-black p-4 font-mono text-[11px] shadow-sm select-none mx-auto"
+        className="w-[300px] bg-white text-black p-4 font-mono text-[11px] shadow-sm select-none mx-auto leading-relaxed"
       >
         {/* LOGO */}
         {settings?.logoUrl && (
@@ -93,43 +110,43 @@ export default function Receipt({ sale }: any) {
             <img
               src={settings.logoUrl}
               alt="Logo"
-              className="w-16 h-16 object-contain"
+              className="w-16 h-16 object-contain filter grayscale contrast-200"
             />
           </div>
         )}
 
         {/* CABECERA */}
-        <div className="text-center mb-4">
-          <h1 className="font-bold uppercase text-sm">
-            {settings?.businessName || "CHALTECH"}
+        <div className="text-center mb-4 space-y-0.5">
+          <h1 className="font-bold uppercase text-sm tracking-wider">
+            {settings?.businessName || "OG-@DMIN"}
           </h1>
           {settings?.rnc && <p>RNC: {settings.rnc}</p>}
-          <p>{settings?.address || "Republica Dominicana"}</p>
-          <p>{settings?.phone || "809-917-0343"}</p>
+          <p>{settings?.address || "República Dominicana"}</p>
+          <p>{settings?.phone || "809-000-0000"}</p>
         </div>
 
-        <div className="border-t border-dashed border-gray-400 my-2" />
+        <div className="border-t border-dashed border-black my-2" />
 
-        {/* DETALLES (ESTILO DOS COLUMNAS) */}
-        <div className="space-y-1">
+        {/* DETALLES DE LA FACTURA */}
+        <div className="space-y-1 text-[11px]">
           <div className="flex justify-between">
-            <span className="text-gray-700">Invoice:</span>
+            <span className="text-gray-600">Factura:</span>
             <span className="font-bold">
               {sale.invoiceNumber || sale.id?.slice(0, 10)}
             </span>
           </div>
           {sale.ncf && (
             <div className="flex justify-between">
-              <span className="text-gray-700">NCF:</span>
+              <span className="text-gray-600">NCF:</span>
               <span className="font-bold">{sale.ncf}</span>
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-gray-700">Fecha:</span>
+            <span className="text-gray-600">Fecha:</span>
             <span>{formattedDate}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-700">Metodo de Pago:</span>
+            <span className="text-gray-600">Método de Pago:</span>
             <span>
               {sale.paymentMethod === "CASH"
                 ? "Efectivo"
@@ -140,23 +157,55 @@ export default function Receipt({ sale }: any) {
           </div>
           {sale.customer && (
             <div className="flex justify-between">
-              <span className="text-gray-700">Cliente:</span>
-              <span className="truncate max-w-[160px]">
+              <span className="text-gray-600">Cliente:</span>
+              <span className="truncate max-w-[160px] font-medium">
                 {sale.customer.name}
               </span>
             </div>
           )}
         </div>
 
-        <div className="border-t border-dashed border-gray-400 my-2" />
+        {/* 🛠️ SECCIÓN DE ORDEN DE SERVICIO / TALLER */}
+        {sale.serviceOrder && (
+          <>
+            <div className="border-t border-dashed border-black my-2" />
+            <div className="space-y-1 text-[10px] p-2 border border-dashed border-black rounded">
+              <div className="font-bold uppercase text-center text-black mb-1">
+                Orden de Servicio #{sale.serviceOrder.ticketNumber}
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Dispositivo:</span>
+                <span className="font-medium">
+                  {sale.serviceOrder.deviceBrand}{" "}
+                  {sale.serviceOrder.deviceModel}
+                </span>
+              </div>
+              {sale.serviceOrder.serialOrImei && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">IMEI/Serial:</span>
+                  <span className="font-mono">
+                    {sale.serviceOrder.serialOrImei}
+                  </span>
+                </div>
+              )}
+              {Number(sale.serviceOrder.laborCost) > 0 && (
+                <div className="flex justify-between pt-1 border-t border-black font-semibold">
+                  <span>Mano de Obra / Taller:</span>
+                  <span>{formatMoney(sale.serviceOrder.laborCost)}</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
-        {/* ITEMS / ARTÍCULOS (DOS COLUMNAS: NOMBRE A LA IZQUIERDA, PRECIO A LA DERECHA) */}
-        <div className="space-y-2 mb-3">
+        <div className="border-t border-dashed border-black my-2" />
+
+        {/* ITEMS / ARTÍCULOS */}
+        <div className="space-y-3 mb-4">
           {items.length === 0 ? (
             <p className="text-center text-gray-500 italic">No hay artículos</p>
           ) : (
             items.map((item: any, idx: number) => {
-              // Obtener el nombre del producto de forma robusta sin importar cómo venga estructurado
               const productName =
                 item.product?.name ||
                 item.productName ||
@@ -165,26 +214,86 @@ export default function Receipt({ sale }: any) {
                 "Artículo";
 
               const quantity = Number(item.quantity ?? item.qty ?? 1);
-              const salePrice = Number(
+              const unitPrice = Number(
                 item.salePrice ?? item.price ?? item.unitPrice ?? 0,
               );
               const lineTotal = Number(
-                item.lineTotal ?? item.total ?? quantity * salePrice,
+                item.lineTotal ?? item.total ?? quantity * unitPrice,
               );
-              const serial = item.serialNumber || item.imei;
+
+              const rawSerials =
+                item.serialNumber ||
+                item.selectedSerials ||
+                item.imei ||
+                item.serial ||
+                item.product?.serialNumber ||
+                item.product?.imei;
+
+              const serialsList: string[] = Array.isArray(rawSerials)
+                ? rawSerials
+                : typeof rawSerials === "string" && rawSerials.trim() !== ""
+                  ? [rawSerials]
+                  : [];
+
+              const laborCost = Number(
+                item.laborCost ??
+                  item.serviceFee ??
+                  item.serviceCost ??
+                  item.repairFee ??
+                  item.labor ??
+                  0,
+              );
+
+              const calculatedLabor =
+                laborCost > 0
+                  ? laborCost
+                  : lineTotal > quantity * unitPrice
+                    ? lineTotal - quantity * unitPrice
+                    : 0;
+
+              const pureItemTotal = quantity * unitPrice;
 
               return (
-                <div key={idx} className="flex flex-col">
-                  <div className="flex justify-between items-start">
-                    <span className="font-bold pr-1">{productName}</span>
-                    <span className="shrink-0">{formatMoney(lineTotal)}</span>
+                <div
+                  key={idx}
+                  className="flex flex-col space-y-1 pb-2 border-b border-dashed border-gray-300 last:border-none"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="font-bold uppercase text-[11px] leading-tight">
+                      {productName}
+                    </span>
+                    <span className="font-bold shrink-0">
+                      {formatMoney(
+                        calculatedLabor > 0 ? pureItemTotal : lineTotal,
+                      )}
+                    </span>
                   </div>
-                  <div className="text-gray-600 text-[10px]">
-                    {quantity} x {formatMoney(salePrice)}
+
+                  <div className="text-gray-600 text-[10px] flex justify-between">
+                    <span>
+                      {quantity} x {formatMoney(unitPrice)}
+                    </span>
                   </div>
-                  {serial && (
-                    <div className="text-[10px] text-gray-500 font-mono mt-0.5">
-                      IMEI/S: {serial}
+
+                  {calculatedLabor > 0 && (
+                    <div className="flex justify-between text-[10px] text-black pl-2 border-l-2 border-black my-0.5">
+                      <span>Mano de Obra / Servicio</span>
+                      <span className="font-medium">
+                        {formatMoney(calculatedLabor)}
+                      </span>
+                    </div>
+                  )}
+
+                  {serialsList.length > 0 && (
+                    <div className="text-[10px] text-black font-mono mt-1 border border-black px-1.5 py-1 rounded space-y-0.5">
+                      <span className="text-black font-semibold block">
+                        IMEI / Seriales:
+                      </span>
+                      {serialsList.map((s, sIdx) => (
+                        <div key={sIdx} className="font-bold">
+                          • {s}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -193,54 +302,62 @@ export default function Receipt({ sale }: any) {
           )}
         </div>
 
-        <div className="border-t border-dashed border-gray-400 my-2" />
+        <div className="border-t border-dashed border-black my-2" />
 
-        {/* TOTALES (ESTILO DOS COLUMNAS ORDENADO) */}
-        <div className="space-y-1">
+        {/* TOTALES */}
+        <div className="space-y-1.5 text-[11px]">
           <div className="flex justify-between">
-            <span className="text-gray-700">Subtotal</span>
+            <span className="text-gray-600">Subtotal</span>
             <span>{formatMoney(subtotal)}</span>
           </div>
 
-          {/* Solo muestra ITBIS si es mayor a 0 */}
           {tax > 0 && (
             <div className="flex justify-between">
-              <span className="text-gray-700">ITBIS</span>
+              <span className="text-gray-600">ITBIS</span>
               <span>{formatMoney(tax)}</span>
             </div>
           )}
 
           {discount > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-700">Desc</span>
+            <div className="flex justify-between font-medium">
+              <span>Descuento</span>
               <span>-{formatMoney(discount)}</span>
             </div>
           )}
 
-          <div className="flex justify-between text-base font-bold border-t border-dashed border-gray-400 pt-1 mt-1 text-black">
-            <span>TOTAL</span>
+          <div className="flex justify-between text-sm font-bold border-t border-dashed border-black pt-2 mt-1 text-black">
+            <span>TOTAL A PAGAR</span>
             <span>{formatMoney(total)}</span>
           </div>
 
-          <div className="flex justify-between text-gray-700 pt-0.5">
-            <span>Items</span>
-            <span>{totalItemsCount || items.length}</span>
+          <div className="flex justify-between text-gray-600 pt-1 text-[10px]">
+            <span>Total de Artículos:</span>
+            <span className="font-bold">{totalItemsCount || items.length}</span>
           </div>
         </div>
 
         {/* QR e-CF DGII */}
         {qrDataUrl && sale.ecfStatus && sale.ecfStatus !== "failure" && (
-          <div className="text-center mt-4">
-            <img src={qrDataUrl} alt="QR e-CF" className="w-20 h-20 mx-auto" />
-            <p className="mt-1 text-[9px]">
-              Comprobante Fiscal Electrónico ({sale.ncfType})
+          <div className="text-center mt-4 pt-2 border-t border-dashed border-black">
+            <img
+              src={qrDataUrl}
+              alt="QR e-CF"
+              className="w-20 h-20 mx-auto filter contrast-200"
+            />
+            <p className="mt-1 text-[9px] font-semibold text-black">
+              Compr. Fiscal Electrónico ({sale.ncfType})
             </p>
           </div>
         )}
 
-        {/* PIE */}
-        <div className="text-center mt-6 text-[10px] space-y-0.5">
-          <p>{settings?.invoiceFooter || "Gracias por su compra!"}</p>
+        {/* PIE DE TICKET */}
+        <div className="text-center mt-6 text-[10px] space-y-1 border-t border-dashed border-black pt-3">
+          <p className="font-medium">
+            {settings?.invoiceFooter || "¡Gracias por preferirnos!"}
+          </p>
+          <p className="text-gray-600 text-[9px]">
+            Conserve este ticket para cualquier reclamación o garantía.
+          </p>
         </div>
       </div>
     </>
