@@ -421,8 +421,8 @@ export class ServiceOrdersService {
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     }
 
-    // ==========================================
-    // AGREGAR REPUESTO
+  // ==========================================
+    // AGREGAR REPUESTO (SOLO REGISTRA EN LA ORDEN, SIN DESCONTAR STOCK AÚN)
     // ==========================================
 
     async addItem(serviceOrderId: string, dto: AddServiceItemDto, businessId: string, userId: string) {
@@ -446,6 +446,8 @@ export class ServiceOrdersService {
                 }
             });
 
+            // Solo validamos que el producto exista y esté activo. 
+            // (Opcional: Si quieres validar que haya stock disponible para asignarlo, puedes dejar el check de stock pero sin restarlo todavía).
             if (!product || product.stock < dto.quantity) {
                 throw new BadRequestException("Producto no disponible o stock insuficiente");
             }
@@ -462,21 +464,8 @@ export class ServiceOrdersService {
                 },
             });
 
-            await tx.product.update({
-                where: { id: product.id },
-                data: { stock: { decrement: dto.quantity } }
-            });
-
-            await tx.inventoryMovement.create({
-                data: {
-                    businessId,
-                    productId: product.id,
-                    userId,
-                    type: 'SALE',
-                    quantity: dto.quantity,
-                    note: `Uso en orden: ${order.ticketNumber}`
-                }
-            });
+            // ❌ ELIMINADO: Ya no descontamos stock aquí ni creamos inventoryMovement falso.
+            // El inventario y el movimiento oficial se harán una sola vez al facturar la orden.
 
             // Registro en historial
             await tx.serviceLog.create({
