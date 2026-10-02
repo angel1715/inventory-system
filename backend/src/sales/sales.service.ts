@@ -122,54 +122,7 @@ export class SalesService {
                 throw new BadRequestException("El total de la venta es menor al costo de piezas y mano de obra.");
             }
 
-            // ==========================================
-            // ACTUALIZACIÓN DE INVENTARIO
-            // ==========================================
-            for (const item of dto.items) {
-                const p = await tx.product.findUnique({
-                    where: { id: item.productId, businessId }
-                });
-
-                if (!p) throw new NotFoundException(`Producto ${item.productId} no encontrado`);
-
-                const prev = p.stock;
-                const newStock = prev - item.quantity;
-
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: {
-                        stock: { decrement: item.quantity },
-                        status: newStock === 0 ? "SOLD" : "AVAILABLE"
-                    }
-                });
-
-                if (item.serialNumber) {
-                    const updateResult = await tx.itemSerial.updateMany({
-                        where: {
-                            serial: item.serialNumber,
-                            productId: item.productId,
-                            isSold: false
-                        },
-                        data: { isSold: true }
-                    });
-
-                    if (updateResult.count === 0) {
-                        throw new BadRequestException(`El serial/IMEI ${item.serialNumber} no está disponible o ya fue vendido.`);
-                    }
-                }
-
-                await tx.inventoryMovement.create({
-                    data: {
-                        businessId,
-                        productId: item.productId,
-                        type: "SALE",
-                        quantity: -item.quantity,
-                        previousStock: prev,
-                        newStock: newStock,
-                        userId
-                    }
-                });
-            }
+           
 
             let ncf: string | null = null;
             let ncfSequenceId: string | null = null;
@@ -245,6 +198,61 @@ export class SalesService {
                     },
                 },
             });;
+
+             // ==========================================
+            // ACTUALIZACIÓN DE INVENTARIO
+            // ==========================================
+            for (const item of dto.items) {
+                const p = await tx.product.findUnique({
+                    where: { id: item.productId, businessId }
+                });
+
+                if (!p) throw new NotFoundException(`Producto ${item.productId} no encontrado`);
+
+                const prev = p.stock;
+                const newStock = prev - item.quantity;
+
+                await tx.product.update({
+                    where: { id: item.productId },
+                    data: {
+                        stock: { decrement: item.quantity },
+                        status: newStock === 0 ? "SOLD" : "AVAILABLE"
+                    }
+                });
+
+                if (item.serialNumber) {
+                    const updateResult = await tx.itemSerial.updateMany({
+                        where: {
+                            serial: item.serialNumber,
+                            productId: item.productId,
+                            isSold: false
+                        },
+                        data: { isSold: true }
+                    });
+
+                    if (updateResult.count === 0) {
+                        throw new BadRequestException(`El serial/IMEI ${item.serialNumber} no está disponible o ya fue vendido.`);
+                    }
+                }
+
+                // Determinamos si el movimiento viene de una orden de reparación o de una venta normal del POS
+                const isRepairSale = Boolean(dto.serviceOrderId);
+
+               await tx.inventoryMovement.create({
+                    data: {
+                        businessId,
+                        productId: item.productId,
+                        type: "SALE", // Usamos el enum permitido por tu base de datos
+                        quantity: -item.quantity,
+                        previousStock: prev, // ¡Nunca más saldrá en "-"!
+                        newStock: newStock,   // ¡Nunca más saldrá en "-"!
+                        userId,
+                        note: isRepairSale 
+                            ? `Pieza usada en Orden de Reparación #${dto.serviceOrderId} (Factura #${sale.invoiceNumber})`
+                            : `Venta POS - Factura #${sale.invoiceNumber}`
+                    }
+                });
+            }
 
             if (dto.serviceOrderId) {
                 await tx.serviceLog.create({

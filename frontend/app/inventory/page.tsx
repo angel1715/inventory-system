@@ -146,7 +146,7 @@ export default function InventoryPage() {
             <button
               disabled={page === 1}
               onClick={() => setPage((prev) => prev - 1)}
-              className="px-4 py-2 rounded-xl border disabled:opacity-50"
+              className="px-4 py-2 rounded-xl border disabled:opacity-50 text-gray-600"
             >
               Previous
             </button>
@@ -156,7 +156,7 @@ export default function InventoryPage() {
             <button
               disabled={page === totalPages}
               onClick={() => setPage((prev) => prev + 1)}
-              className="px-4 py-2 rounded-xl border disabled:opacity-50"
+              className="px-4 py-2 rounded-xl border disabled:opacity-50 text-gray-600"
             >
               Next
             </button>
