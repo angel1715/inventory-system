@@ -5,12 +5,12 @@ import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
 import { JwtStrategy } from "./jwt.strategy";
 import { PrismaService } from "../prisma/prisma.service";
-import { EmailModule } from "../email/email.module"; // <--- AQUÍ ESTÁ LA IMPORTACIÓN
+import { EmailModule } from "../email/email.module";
 
 @Module({
     imports: [
         ConfigModule,
-        EmailModule, // <--- AQUÍ ESTÁ EL REGISTRO DEL MÓDULO
+        EmailModule, 
         JwtModule.registerAsync({
             imports: [ConfigModule],
             inject: [ConfigService],
@@ -33,4 +33,4 @@ import { EmailModule } from "../email/email.module"; // <--- AQUÍ ESTÁ LA IMPO
         JwtModule,
     ],
 })
-export class AuthModule { } // <--- EL EXPORT QUE SOLUCIONARÁ TU ERROR
+export class AuthModule { } 

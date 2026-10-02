@@ -24,17 +24,12 @@ export default function LoginPage() {
       if (!data?.token || !data?.user)
         throw new Error("Respuesta inválida del servidor");
 
-      // 1. Guardar token en tu contexto
+      // Guardamos el token a través del Contexto (que gestiona la cookie limpiamente)
       await login(data.token);
-
-      // 2. GUARDAR COOKIES PARA EL MIDDLEWARE (Crucial)
-      // Guardamos el token y el status de suscripción
-      document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Lax;`;
-      document.cookie = `subStatus=${data.user.subscriptionStatus}; path=/; max-age=86400; SameSite=Lax;`;
 
       toast.success("¡Bienvenido!");
 
-      // 3. Redirección inteligente basada en el estado
+      // Redirección inteligente basada en el estado de suscripción
       if (data.user.subscriptionStatus === "ACTIVE") {
         window.location.href = "/dashboard";
       } else {

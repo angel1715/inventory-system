@@ -90,7 +90,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         businessId: business.id,
-      });
+      }, { expiresIn: '12h' });
 
       return {
         token: jwtToken,
@@ -119,7 +119,6 @@ export class AuthService {
     });
 
     if (!user || !user.active) throw new UnauthorizedException("Credenciales inválidas");
-
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) throw new UnauthorizedException("Credenciales inválidas");
 
@@ -134,7 +133,7 @@ export class AuthService {
 
     const token = await this.jwtService.signAsync({
       sub: user.id, email: user.email, role: user.role, businessId: user.businessId,
-    });
+    }, { expiresIn: '12h' });
 
     return {
       token,

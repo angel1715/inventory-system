@@ -7,7 +7,7 @@ import {
   useState,
   useCallback,
 } from "react";
-import Cookies from "js-cookie"; // Asegúrate de tener instalada esta librería
+import Cookies from "js-cookie";
 import { me } from "@/lib/api";
 
 export type User = {
@@ -25,8 +25,8 @@ export type AuthContextType = {
   loading: boolean;
   login: (token: string) => Promise<void>;
   logout: () => void;
-  loadUser: () => Promise<void>; // Esta es la que refresca
-  refreshUser: () => Promise<void>; // Alias para claridad
+  loadUser: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   isOwner: () => boolean;
   isEmployee: () => boolean;
 };
@@ -37,27 +37,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // AQUÍ ES DONDE REEMPLAZAS TODO EL LOADUSER
-  // En AuthProvider, asegúrate de esto:
   const loadUser = useCallback(async () => {
     const token = Cookies.get("token");
     if (!token) {
+      setUser(null);
       setLoading(false);
       return;
     }
 
     try {
-      // IMPORTANTE: Asegúrate de que la función 'me()' en lib/api.ts
-      // NO tenga caché (a veces los navegadores cachean los GET)
+      // Intentamos obtener los datos del usuario con el token actual
       const data = await me();
       setUser(data);
     } catch (err) {
-      Cookies.remove("token");
+      console.error("Error al validar sesión en reload:", err);
+      // OJO: Si hay un fallo de red momentáneo al recargar, 
+      // no borres la cookie de inmediato para evitar falsos positivos de desconexión.
       setUser(null);
     } finally {
       setLoading(false);
     }
-  }, []); // Está bien, pero asegúrate de que 'me()' sea confiable.
+  }, []);
 
   useEffect(() => {
     loadUser();
@@ -65,24 +65,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (token: string) => {
     Cookies.set("token", token, { expires: 7, path: "/", sameSite: "lax" });
-
-    // LOG DE VERIFICACIÓN INMEDIATA
-    const check = Cookies.get("token");
-    console.log("DEBUG: ¿Se escribió la cookie correctamente?", check);
-
+    setLoading(true);
     await loadUser();
   };
 
   const logout = () => {
     Cookies.remove("token");
+    Cookies.remove("subStatus");
     setUser(null);
     window.location.replace("/login");
   };
 
   const isOwner = () => user?.role === "OWNER";
   const isEmployee = () => user?.role === "EMPLOYEE";
-
   const refreshUser = loadUser;
+
   return (
     <AuthContext.Provider
       value={{
@@ -91,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         loadUser,
-        refreshUser, // Ahora disponible en el hook useAuth
+        refreshUser,
         isOwner,
         isEmployee,
       }}
