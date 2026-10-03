@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Printer, Download } from "lucide-react";
+import { X, Printer } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import Receipt from "../Receipt";
@@ -20,7 +20,6 @@ export default function ReceiptModal({
   autoPrint = false,
 }: Props) {
   const receiptRef = useRef<HTMLDivElement>(null);
-  const [processing, setProcessing] = useState(false);
   const [currentSale, setCurrentSale] = useState(sale);
 
   useEffect(() => {
@@ -37,30 +36,34 @@ export default function ReceiptModal({
       return;
     }
 
-    // Extraemos solo el HTML del ticket
     const ticketHTML = ticket.innerHTML;
 
     printWindow.document.write(`
       <html>
         <head>
           <title>Factura</title>
+          <!-- Cargamos Tailwind por CDN para que respete todas las clases del recibo -->
+          <script src="https://cdn.tailwindcss.com"></script>
           <style>
-            /* Reset básico para que no herede nada extraño */
             * { box-sizing: border-box; }
-            body { margin: 0; padding: 20px; font-family: monospace; display: flex; justify-content: center; }
-            
-            /* Estilos directos para el ticket */
-            #receipt { width: 300px; padding: 10px; border: 1px solid #ccc; }
-            .text-center { text-align: center; }
-            .font-bold { font-weight: bold; }
-            .flex { display: flex; justify-content: space-between; }
-            .border-t { border-top: 1px dashed #000; margin: 10px 0; }
-            img { max-width: 80px; display: block; margin: 0 auto; }
-            .uppercase { text-transform: uppercase; }
-            
+            body { 
+              margin: 0; 
+              padding: 0; 
+              font-family: monospace; 
+              background: white; 
+              display: flex; 
+              justify-content: center; 
+            }
+            #receipt { 
+              width: 78mm !important; 
+              max-width: 78mm !important; 
+              padding: 6px !important; 
+              background: white !important;
+              color: black !important;
+            }
             @media print {
               body { padding: 0; }
-              #receipt { border: none; }
+              #receipt { border: none !important; box-shadow: none !important; }
             }
           </style>
         </head>
@@ -68,11 +71,10 @@ export default function ReceiptModal({
           <div id="receipt">${ticketHTML}</div>
           <script>
             window.onload = () => {
-              // Damos un tiempo extra para asegurar que el navegador procese el DOM
               setTimeout(() => {
                 window.print();
                 window.close();
-              }, 600);
+              }, 500);
             };
           </script>
         </body>
@@ -111,7 +113,7 @@ export default function ReceiptModal({
         <div className="p-4 border-t grid grid-cols-2 gap-2">
           <button
             onClick={handlePrint}
-            className="bg-black text-white py-2 rounded-xl flex justify-center items-center gap-2 hover:bg-gray-800 transition"
+            className="bg-black text-white py-2 rounded-xl flex justify-center items-center gap-2 hover:bg-gray-800 transition col-span-2"
           >
             <Printer className="w-4 h-4" /> Imprimir
           </button>

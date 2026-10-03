@@ -128,7 +128,7 @@ export default function Receipt({ sale }: any) {
         <div className="border-t border-dashed border-black my-2" />
 
         {/* DETALLES DE LA FACTURA */}
-        <div className="space-y-1 text-[11px]">
+        <div className="space-y-1.5 text-[11px] my-2">
           <div className="flex justify-between">
             <span className="text-gray-600">Factura:</span>
             <span className="font-bold">
@@ -201,7 +201,7 @@ export default function Receipt({ sale }: any) {
         <div className="border-t border-dashed border-black my-2" />
 
         {/* ITEMS / ARTÍCULOS */}
-        <div className="space-y-3 mb-4">
+                <div className="space-y-4 mb-4">
           {items.length === 0 ? (
             <p className="text-center text-gray-500 italic">No hay artículos</p>
           ) : (
