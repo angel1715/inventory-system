@@ -547,79 +547,86 @@ export class SalesService {
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
     }
 
-    async getMetrics(businessId: string, startDate: string, endDate: string) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
 
-    // 1. Consultar ventas del periodo con relaciones financieras clave
-    const sales = await this.prisma.sale.findMany({
-        where: {
-            businessId,
-            createdAt: { gte: start, lte: end },
-        },
-        include: {
-            items: { include: { product: true } },
-            serviceOrder: true,
-            accountsReceivable: true, // Necesario para aislar el abono inicial
-        },
-    });
+    
 
-    // 2. Consultar abonos de créditos realizados en este periodo exacto
-    const periodPayments = await this.prisma.creditMovement.findMany({
-        where: {
-            creditAccount: { businessId },
-            type: 'PAYMENT',
-            createdAt: { gte: start, lte: end },
-        },
-    });
-
-    let totalGrossSales = 0;
-    let totalCogs = 0;
-    let totalLaborCost = 0;
-    let initialCashCollected = 0;
-    let creditIssued = 0;
-
-    for (const sale of sales) {
-        const saleTotal = Number(sale.total || 0);
-        totalGrossSales += saleTotal;
-
-        // Costo de mercancía vendida (COGS)
-        for (const item of sale.items) {
-            const itemCost = Number(item.product?.costPrice || 0);
-            totalCogs += itemCost * item.quantity;
+    async getMetrics(businessId: string, startDate?: string, endDate?: string) {
+        // Si no mandan fechas, por defecto podemos tomar desde el inicio del mes actual o dejarlo abierto
+        const dateFilter: any = {};
+        if (startDate && endDate) {
+            dateFilter.gte = new Date(startDate);
+            dateFilter.lte = new Date(endDate);
         }
 
-        // Costo de mano de obra (si aplica)
-        if (sale.serviceOrder) {
-            totalLaborCost += Number(sale.serviceOrder.laborCost || 0);
+        // 1. Consultar ventas del periodo con relaciones financieras clave
+        const sales = await this.prisma.sale.findMany({
+            where: {
+                businessId,
+                ...(startDate && endDate ? { createdAt: dateFilter } : {}),
+            },
+            include: {
+                items: { include: { product: true } },
+                serviceOrder: true,
+                accountsReceivable: true, // Necesario para aislar el abono inicial
+            },
+        });
+
+        // 2. Consultar abonos de créditos realizados en este periodo exacto
+        const periodPayments = await this.prisma.creditMovement.findMany({
+            where: {
+                creditAccount: { businessId },
+                type: 'PAYMENT',
+                ...(startDate && endDate ? { createdAt: dateFilter } : {}),
+            },
+        });
+
+        let totalGrossSales = 0;
+        let totalCogs = 0;
+        let totalLaborCost = 0;
+        let initialCashCollected = 0;
+        let creditIssued = 0;
+
+        for (const sale of sales) {
+            const saleTotal = Number(sale.total || 0);
+            totalGrossSales += saleTotal;
+
+            // Costo de mercancía vendida (COGS)
+            for (const item of sale.items) {
+                const itemCost = Number(item.product?.costPrice || 0);
+                totalCogs += itemCost * item.quantity;
+            }
+
+            // Costo de mano de obra (si aplica)
+            if (sale.serviceOrder) {
+                totalLaborCost += Number(sale.serviceOrder.laborCost || 0);
+            }
+
+            // Lógica de entrada de dinero real por tipo de pago
+            if (sale.paymentMethod !== 'CREDIT') {
+                initialCashCollected += saleTotal; // Contado o transferencia entra el 100%
+            } else {
+                creditIssued += saleTotal; // Se registra la deuda generada
+                // Solo entra a la caja el abono inicial configurado en la cuenta por cobrar
+                const initialPayment = sale.accountsReceivable ? Number(sale.accountsReceivable.paidAmount || 0) : 0;
+                initialCashCollected += initialPayment;
+            }
         }
 
-        // Lógica de entrada de dinero real por tipo de pago
-        if (sale.paymentMethod !== 'CREDIT') {
-            initialCashCollected += saleTotal; // Contado o transferencia entra el 100%
-        } else {
-            creditIssued += saleTotal; // Se registra la deuda generada
-            // Solo entra a la caja el abono inicial configurado en la cuenta por cobrar
-            const initialPayment = sale.accountsReceivable ? Number(sale.accountsReceivable.paidAmount || 0) : 0;
-            initialCashCollected += initialPayment;
-        }
+        // Total de abonos posteriores cobrados en el rango
+        const totalPaymentsCollected = periodPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+
+        // Flujo de efectivo total real que entró a caja en el periodo
+        const totalCashInflow = initialCashCollected + totalPaymentsCollected;
+
+        return {
+            totalGrossSales,        // Facturación comercial total
+            totalCashInflow,        // Dinero real en caja (Contado + Abonos iniciales + Abonos posteriores)
+            creditIssued,           // Deuda total acumulada generada
+            totalPaymentsCollected, // Abonos recuperados de créditos
+            totalCogs,
+            totalLaborCost,
+        };
     }
-
-    // Total de abonos posteriores cobrados en el rango
-    const totalPaymentsCollected = periodPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
-
-    // Flujo de efectivo total real que entró a caja en el periodo
-    const totalCashInflow = initialCashCollected + totalPaymentsCollected;
-
-    return {
-        totalGrossSales,     // Facturación comercial total
-        totalCashInflow,     // Dinero real en caja (Contado + Abonos iniciales + Abonos posteriores)
-        creditIssued,        // Deuda total acumulada generada
-        totalPaymentsCollected, // Abonos recuperados de créditos
-        totalCogs,
-        totalLaborCost,
-    };
-}
     // =========================================================================
     // DASHBOARD OPTIMIZADO - Lógica de Utilidad Real basada en Caja
     // =========================================================================
