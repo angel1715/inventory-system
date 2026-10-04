@@ -21,19 +21,19 @@ import { SubscriptionGuard } from "../subscription/subscription.guard";
 export class SalesController {
     constructor(private salesService: SalesService) { }
 
-
-
     // =========================
     // NEW DASHBOARD (MAIN) - Ruta estática arriba
     // =========================
     @Get("dashboard")
     getDashboard(
         @Request() req,
-        @Query("range") range: "today" | "week" | "month" = "today",
+        @Query("startDate") startDate?: string,
+        @Query("endDate") endDate?: string,
     ) {
         return this.salesService.getDashboard(
             req.user.businessId,
-            range,
+            startDate,
+            endDate,
         );
     }
 
@@ -43,13 +43,13 @@ export class SalesController {
     @Get("metrics")
     async getMetrics(
         @Request() req,
-        @Query("startDate") startDate?: string,
-        @Query("endDate") endDate?: string,
+        @Query("startDate") startDate: string,
+        @Query("endDate") endDate: string,
     ) {
         return this.salesService.getMetrics(
             req.user.businessId,
-            startDate ? new Date(startDate) : undefined,
-            endDate ? new Date(endDate) : undefined,
+            startDate,
+            endDate,
         );
     }
 
@@ -72,7 +72,6 @@ export class SalesController {
         @Query("page", new DefaultValuePipe(1), ParseIntPipe) page: number,
         @Query("limit", new DefaultValuePipe(10), ParseIntPipe) limit: number,
         @Query("search", new DefaultValuePipe("")) search: string,
-        // Nuevos parámetros de filtro
         @Query("paymentMethod", new DefaultValuePipe("ALL")) paymentMethod: string,
         @Query("dateRange", new DefaultValuePipe("ALL")) dateRange: string,
     ) {
@@ -87,7 +86,11 @@ export class SalesController {
     }
 
     @Get('export')
-    exportAll(@Request() req, @Query("paymentMethod") paymentMethod: string, @Query("dateRange") dateRange: string) {
+    exportAll(
+        @Request() req, 
+        @Query("paymentMethod") paymentMethod: string, 
+        @Query("dateRange") dateRange: string
+    ) {
         return this.salesService.exportAll(
             req.user.businessId,
             paymentMethod,
@@ -100,7 +103,7 @@ export class SalesController {
     // =========================
     @Post()
     createSale(
-        @Body() dto: CreateSaleDto & { initialPayment?: number }, // 👈 Agregamos la intersección aquí
+        @Body() dto: CreateSaleDto & { initialPayment?: number },
         @Request() req: any
     ) {
         return this.salesService.createSale(
@@ -131,5 +134,4 @@ export class SalesController {
             req.user.businessId,
         );
     }
-
 }
