@@ -547,255 +547,167 @@ export class SalesService {
             .reduce((acc, p) => acc + Number(p.amount || 0), 0);
     }
 
-    async getMetrics(businessId: string, startDate?: Date, endDate?: Date) {
-        // Definir rangos por defecto (mes actual si no se envían fechas)
-        const now = new Date();
-        const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-        const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    async getMetrics(businessId: string, startDate: string, endDate: string) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-        // 1. Obtener todas las ventas completadas en el rango de fechas con sus relaciones reales
-        const sales = await this.prisma.sale.findMany({
-            where: {
-                businessId,
-                createdAt: { gte: start, lte: end },
-            },
-            include: {
-                items: {
-                    include: {
-                        product: true, // Aquí obtenemos el costPrice real del producto
-                    },
-                },
-                serviceOrder: true, // Para extraer la mano de obra si la venta viene de taller
-                customer: {
-                    include: {
-                        creditAccount: {
-                            include: {
-                                movements: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
+    // 1. Consultar ventas del periodo con relaciones financieras clave
+    const sales = await this.prisma.sale.findMany({
+        where: {
+            businessId,
+            createdAt: { gte: start, lte: end },
+        },
+        include: {
+            items: { include: { product: true } },
+            serviceOrder: true,
+            accountsReceivable: true, // Necesario para aislar el abono inicial
+        },
+    });
 
-        let totalGrossSales = 0;
-        let totalCogs = 0;         // Costo de inventario (Cost of Goods Sold)
-        let totalLaborCost = 0;    // Mano de obra de técnicos (desde ServiceOrder)
-        let initialCashCollected = 0;
-        let creditIssued = 0;
-        let creditCollectedInPeriod = 0;
+    // 2. Consultar abonos de créditos realizados en este periodo exacto
+    const periodPayments = await this.prisma.creditMovement.findMany({
+        where: {
+            creditAccount: { businessId },
+            type: 'PAYMENT',
+            createdAt: { gte: start, lte: end },
+        },
+    });
 
-        for (const sale of sales) {
-            const saleTotal = Number(sale.total);
-            totalGrossSales += saleTotal;
+    let totalGrossSales = 0;
+    let totalCogs = 0;
+    let totalLaborCost = 0;
+    let initialCashCollected = 0;
+    let creditIssued = 0;
 
-            // Calcular COGS usando costPrice del producto relacionado al SaleItem
-            for (const item of sale.items) {
-                const itemCost = Number(item.product?.costPrice || 0);
-                totalCogs += itemCost * item.quantity;
-            }
+    for (const sale of sales) {
+        const saleTotal = Number(sale.total || 0);
+        totalGrossSales += saleTotal;
 
-            // Si la venta tiene una orden de servicio asociada, sumar su costo de mano de obra
-            if (sale.serviceOrder) {
-                totalLaborCost += Number(sale.serviceOrder.laborCost || 0);
-            }
-
-            // Determinar ingresos iniciales según el método de pago
-            if (sale.paymentMethod !== 'CREDIT') {
-                initialCashCollected += saleTotal; // Si pagó al contado (CASH, CARD, TRANSFER)
-            } else {
-                creditIssued += saleTotal;
-            }
-
-            // Revisar movimientos de crédito del cliente asociado a esta venta
-            if (sale.customer?.creditAccount?.movements) {
-                for (const mov of sale.customer.creditAccount.movements) {
-                    // Si el abono (PAYMENT) ocurrió dentro del rango y está vinculado a esta venta o en general
-                    if (mov.type === 'PAYMENT' && mov.createdAt >= start && mov.createdAt <= end) {
-                        // Validar si el movimiento corresponde a esta venta o sumar de forma global de la cuenta
-                        if (mov.saleId === sale.id || !mov.saleId) {
-                            creditCollectedInPeriod += Number(mov.amount);
-                        }
-                    }
-                }
-            }
+        // Costo de mercancía vendida (COGS)
+        for (const item of sale.items) {
+            const itemCost = Number(item.product?.costPrice || 0);
+            totalCogs += itemCost * item.quantity;
         }
 
-        // 2. Buscar abonos históricos realizados en este periodo a créditos de ventas de meses anteriores
-        const externalCreditMovements = await this.prisma.creditMovement.findMany({
-            where: {
-                type: 'PAYMENT',
-                createdAt: { gte: start, lte: end },
-                creditAccount: {
-                    businessId,
-                },
-                OR: [
-                    { saleId: { equals: null } },
-                    {
-                        sale: {
-                            createdAt: { lt: start },
-                        },
-                    },
-                ],
-            },
-        });
-
-        let historicalCreditCollected = 0;
-        for (const mov of externalCreditMovements) {
-            historicalCreditCollected += Number(mov.amount);
+        // Costo de mano de obra (si aplica)
+        if (sale.serviceOrder) {
+            totalLaborCost += Number(sale.serviceOrder.laborCost || 0);
         }
 
-        // 3. Totales Financieros bajo Criterio de Caja
-        const totalCashInflow = initialCashCollected + creditCollectedInPeriod + historicalCreditCollected;
-        const totalCosts = totalCogs + totalLaborCost;
-        const grossProfit = totalGrossSales - totalCosts;
-
-        return {
-            period: {
-                start,
-                end,
-            },
-            revenue: {
-                grossSales: totalGrossSales,          // Total vendido en el periodo
-                cashCollected: totalCashInflow,       // Dinero real ingresado a caja
-                creditIssued,                         // Créditos otorgados
-                creditCollected: creditCollectedInPeriod + historicalCreditCollected, // Abonos totales recibidos
-            },
-            costs: {
-                cogs: totalCogs,                      // Costo de inventario vendido
-                laborCost: totalLaborCost,            // Mano de obra de servicios técnicos
-                totalCosts,                           // Costos operativos totales
-            },
-            profitability: {
-                grossProfit,                          // Utilidad bruta
-                profitMargin: totalGrossSales > 0 ? Number(((grossProfit / totalGrossSales) * 100).toFixed(2)) : 0,
-            },
-            totals: {
-                transactionsCount: sales.length,
-            },
-        };
+        // Lógica de entrada de dinero real por tipo de pago
+        if (sale.paymentMethod !== 'CREDIT') {
+            initialCashCollected += saleTotal; // Contado o transferencia entra el 100%
+        } else {
+            creditIssued += saleTotal; // Se registra la deuda generada
+            // Solo entra a la caja el abono inicial configurado en la cuenta por cobrar
+            const initialPayment = sale.accountsReceivable ? Number(sale.accountsReceivable.paidAmount || 0) : 0;
+            initialCashCollected += initialPayment;
+        }
     }
 
+    // Total de abonos posteriores cobrados en el rango
+    const totalPaymentsCollected = periodPayments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
 
+    // Flujo de efectivo total real que entró a caja en el periodo
+    const totalCashInflow = initialCashCollected + totalPaymentsCollected;
+
+    return {
+        totalGrossSales,     // Facturación comercial total
+        totalCashInflow,     // Dinero real en caja (Contado + Abonos iniciales + Abonos posteriores)
+        creditIssued,        // Deuda total acumulada generada
+        totalPaymentsCollected, // Abonos recuperados de créditos
+        totalCogs,
+        totalLaborCost,
+    };
+}
     // =========================================================================
     // DASHBOARD OPTIMIZADO - Lógica de Utilidad Real basada en Caja
     // =========================================================================
-    async getDashboard(businessId: string, range: "today" | "week" | "month") {
-        try {
-            const dateFilter = this.getDateFilter(range);
-
-            const [payments, expenses, totalDebtData] = await Promise.all([
-                this.prisma.creditMovement.findMany({
-                    where: { type: "PAYMENT", createdAt: dateFilter, creditAccount: { businessId } },
-                    include: { sale: { include: { items: { include: { product: true } }, serviceOrder: true } } }
-                }),
-                this.prisma.expense.findMany({ where: { businessId, createdAt: dateFilter } }),
-                this.prisma.creditAccount.aggregate({ where: { businessId }, _sum: { currentDebt: true } }),
-            ]);
-
-            const salesInRange = await this.prisma.sale.findMany({
-                where: { businessId, createdAt: dateFilter },
-                include: {
-                    items: { include: { product: true } },
-                    serviceOrder: true
-                }
-            });
-
-            const cashSales = salesInRange.filter(s => s.paymentMethod !== "CREDIT");
-            let totalRealProfit = 0;
-
-            // 1. Sumar la utilidad de las ventas hechas en el rango (sea contado o crédito inicial)
-            for (const sale of salesInRange) {
-                totalRealProfit += this.calculateProfitForSale(sale, payments);
-            }
-
-            const salesByDayMap = new Map<string, number>();
-
-            cashSales.forEach(s => {
-                const date = new Date(s.createdAt).toISOString().split('T')[0];
-                salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(s.total));
-            });
-            payments.forEach(p => {
-                const date = new Date(p.createdAt).toISOString().split('T')[0];
-                salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(p.amount));
-            });
-
-            const salesByDay = Array.from(salesByDayMap.entries())
-                .map(([date, total]) => ({ date, total }))
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-            const paymentMethodMap = new Map<string, number>();
-            cashSales.forEach(s => {
-                const method = s.paymentMethod || "CASH";
-                paymentMethodMap.set(method, (paymentMethodMap.get(method) || 0) + Number(s.total));
-            });
-
-            const totalRecaudado = payments.reduce((acc, p) => acc + Number(p.amount), 0);
-            if (totalRecaudado > 0) {
-                paymentMethodMap.set("RECAUDACIÓN", (paymentMethodMap.get("RECAUDACIÓN") || 0) + totalRecaudado);
-            }
-
-            const paymentMethods = Array.from(paymentMethodMap.entries())
-                .map(([method, total]) => ({ method, total }));
-
-            const totalCashIn = cashSales.reduce((acc, s) => acc + Number(s.total || 0), 0) + totalRecaudado;
-            const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount || 0), 0);
-
-            const allCreditSales = await this.prisma.sale.findMany({ where: { businessId, paymentMethod: "CREDIT" } });
-            const allPayments = await this.prisma.creditMovement.findMany({ where: { type: "PAYMENT", creditAccount: { businessId } } });
-            const totalCreditPending = allCreditSales.reduce((acc, s) => {
-                const pagado = allPayments.filter(p => p.saleId === s.id).reduce((a, p) => a + Number(p.amount || 0), 0);
-                return acc + Math.max(0, Number(s.total || 0) - pagado);
-            }, 0);
-
-            // --- LÓGICA PARA EL TOP DE PRODUCTOS MÁS VENDIDOS (Basada en salesInRange) ---
-            const productMap = new Map<string, { name: string; totalSold: number; revenue: number }>();
-
-            for (const sale of salesInRange) {
-                for (const item of sale.items) {
-                    const productName = item.product?.name || "Artículo sin nombre";
-                    const quantity = Number(item.quantity || 0);
-                    const itemRevenue = Number(item.lineTotal || (quantity * Number(item.salePrice || 0)));
-
-                    if (productMap.has(productName)) {
-                        const current = productMap.get(productName)!;
-                        current.totalSold += quantity;
-                        current.revenue += itemRevenue;
-                    } else {
-                        productMap.set(productName, {
-                            name: productName,
-                            totalSold: quantity,
-                            revenue: itemRevenue,
-                        });
-                    }
-                }
-            }
-
-            const topProducts = Array.from(productMap.values())
-                .sort((a, b) => b.totalSold - a.totalSold)
-                .slice(0, 5);
-            // --------------------------------------------------------------------------
-
-            return {
-                revenue: round(totalCashIn),
-                expenses: round(totalExpenses),
-                cashFlow: round(totalCashIn - totalExpenses),
-                profit: round(totalRealProfit - totalExpenses),
-                totalOrders: salesInRange.length,
-                accountsReceivable: round(totalDebtData._sum.currentDebt || 0),
-                creditPending: round(totalCreditPending),
-                salesByDay,
-                paymentMethods,
-                topProducts: topProducts.map(p => ({
-                    ...p,
-                    revenue: round(p.revenue)
-                }))
-            };
-        } catch (error) {
-            console.error("Error en getDashboard:", error);
-            throw new InternalServerErrorException("Dashboard failed");
-        }
+    async getDashboard(businessId: string, startDate?: string, endDate?: string) {
+    // Configuración del rango de fechas
+    const dateFilter: any = {};
+    if (startDate && endDate) {
+        dateFilter.gte = new Date(startDate);
+        dateFilter.lte = new Date(endDate);
     }
+
+    // 1. Consultar ventas en el rango incluyendo la cuenta por cobrar (para el abono inicial)
+    const salesInRange = await this.prisma.sale.findMany({
+        where: { businessId, createdAt: dateFilter },
+        include: {
+            items: { include: { product: true } },
+            serviceOrder: true,
+            accountsReceivable: true, // Crucial para extraer el paidAmount inicial
+        },
+    });
+
+    // 2. Consultar los abonos posteriores realizados en el rango (movimientos de crédito tipo PAYMENT)
+    const payments = await this.prisma.creditMovement.findMany({
+        where: {
+            creditAccount: { businessId },
+            type: 'PAYMENT',
+            createdAt: dateFilter,
+        },
+    });
+
+    // Separar ventas de contado y de crédito
+    const cashSales = salesInRange.filter(s => s.paymentMethod !== 'CREDIT');
+    const creditSalesInRange = salesInRange.filter(s => s.paymentMethod === 'CREDIT');
+
+    // Cálculos de ingresos reales de caja
+    const totalCashSales = cashSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    
+    // Abono inicial aportado el mismo día de la venta a crédito
+    const totalInitialPayments = creditSalesInRange.reduce((acc, s) => {
+        const paidInitial = s.accountsReceivable ? Number(s.accountsReceivable.paidAmount || 0) : 0;
+        return acc + paidInitial;
+    }, 0);
+
+    // Abonos posteriores recibidos en cuentas por cobrar
+    const totalRecaudado = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+
+    // Flujo de caja real total en el periodo
+    const totalCashIn = totalCashSales + totalInitialPayments + totalRecaudado;
+
+    // Total facturado comercial (para referencia global)
+    const totalGrossSales = salesInRange.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    const totalCreditIssued = creditSalesInRange.reduce((acc, s) => acc + Number(s.total || 0), 0);
+
+    // Mapa de distribución de ingresos por día para gráficas
+    const salesByDayMap = new Map<string, number>();
+
+    cashSales.forEach(s => {
+        const date = new Date(s.createdAt).toISOString().split('T')[0];
+        salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(s.total || 0));
+    });
+
+    creditSalesInRange.forEach(s => {
+        const date = new Date(s.createdAt).toISOString().split('T')[0];
+        const initial = s.accountsReceivable ? Number(s.accountsReceivable.paidAmount || 0) : 0;
+        if (initial > 0) {
+            salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + initial);
+        }
+    });
+
+    payments.forEach(p => {
+        const date = new Date(p.createdAt).toISOString().split('T')[0];
+        salesByDayMap.set(date, (salesByDayMap.get(date) || 0) + Number(p.amount || 0));
+    });
+
+    const salesByDay = Array.from(salesByDayMap.entries()).map(([date, total]) => ({
+        date,
+        total,
+    }));
+
+    return {
+        totalGrossSales,
+        totalCashIn,
+        totalCreditIssued,
+        totalCreditCollected: totalRecaudado,
+        salesByDay,
+        salesCount: salesInRange.length,
+    };
+}
 
     // =========================================================================
     // DASHBOARD STATS (HEADER)
