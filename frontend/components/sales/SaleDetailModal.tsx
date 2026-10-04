@@ -17,7 +17,7 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
   if (!open || !currentSale) return null;
 
   // =========================
-  // PRINT (CLEAN + RELIABLE)
+  // PRINT (CLEAN + RELIABLE - IDÉNTICO AL POS)
   // =========================
   function printReceipt() {
     const ticket = document.getElementById("receipt");
@@ -27,91 +27,63 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
       return;
     }
 
-    const printWindow = window.open("", "", "width=400,height=700");
+    const printWindow = window.open("", "_blank", "width=400,height=600");
 
     if (!printWindow) {
       toast.error("Popup blocked");
       return;
     }
 
+    const ticketHTML = ticket.innerHTML;
+
     printWindow.document.write(`
-    <html>
-      <head>
-        <title>Invoice</title>
-
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            background: white;
-            font-family: monospace;
-            display: flex;
-            justify-content: center;
-          }
-
-          /* 🔥 ESTE ES EL TRUCO CLAVE */
-          #receipt {
-            width: 300px !important;
-            padding: 10px !important;
-          }
-
-          img {
-            max-width: 80px !important;
-            max-height: 80px !important;
-            object-fit: contain !important;
-            display: block;
-            margin: 0 auto;
-          }
-
-          .border-t {
-            border-top: 1px dashed #999 !important;
-          }
-
-          .border-b {
-            border-bottom: 1px dashed #999 !important;
-          }
-
-          .text-center {
-            text-align: center;
-          }
-
-          * {
-            box-sizing: border-box;
-          }
-
-          h1, h2, h3, p, span {
-            margin: 0;
-            padding: 0;
-          }
-
-          .space-y-4 > * + * {
-            margin-top: 10px;
-          }
-
-          .flex {
-            display: flex;
-            justify-content: space-between;
-          }
-        </style>
-      </head>
-
-      <body>
-        ${ticket.outerHTML}
-      </body>
-    </html>
-  `);
+      <html>
+        <head>
+          <title>Reimpresión de Factura</title>
+          <!-- Cargamos Tailwind por CDN para que respete exactamente el formato -->
+          <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            * { box-sizing: border-box; }
+            body { 
+              margin: 0; 
+              padding: 0; 
+              font-family: monospace; 
+              background: white; 
+              display: flex; 
+              justify-content: center; 
+            }
+            #receipt { 
+              width: 78mm !important; 
+              max-width: 78mm !important; 
+              padding: 6px !important; 
+              background: white !important;
+              color: black !important;
+            }
+            @media print {
+              body { padding: 0; }
+              #receipt { border: none !important; box-shadow: none !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div id="receipt">${ticketHTML}</div>
+          <script>
+            window.onload = () => {
+              setTimeout(() => {
+                window.print();
+                window.close();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
 
     printWindow.document.close();
-
-    setTimeout(() => {
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    }, 500);
   }
 
   // =========================
-  // PDF EXPORT (UNCHANGED BUT SAFE)
+  // PDF EXPORT
   // =========================
   async function downloadPDF() {
     const input = document.getElementById("invoice-content");
@@ -153,7 +125,7 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
 
           <button
             onClick={onClose}
-            className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl"
+            className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-xl transition"
           >
             Close
           </button>
@@ -199,7 +171,6 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
                 className="border rounded-2xl p-4 flex justify-between"
               >
                 <div>
-                  {/* Usamos ?. para evitar el error si product es undefined */}
                   <h3 className="text-gray-600 font-bold">
                     {item.product?.name || "Producto sin nombre"}
                   </h3>
@@ -252,21 +223,21 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
           <div className="flex flex-col md:flex-row gap-4">
             <button
               onClick={printReceipt}
-              className="bg-black text-white px-5 py-4 rounded-2xl"
+              className="bg-black text-white px-5 py-4 rounded-2xl hover:bg-gray-800 transition"
             >
               Imprimir Invoice
             </button>
 
             <button
               onClick={printReceipt}
-              className="border px-5 py-4 rounded-2xl bg-blue-600"
+              className="border px-5 py-4 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 transition"
             >
               ReImprimir
             </button>
           </div>
         </div>
 
-        {/* HIDDEN RECEIPT (IMPORTANT FIX) */}
+        {/* HIDDEN RECEIPT (Mantiene la estructura exacta del componente Receipt) */}
         <div className="hidden">
           <div id="receipt">
             <Receipt sale={currentSale} />
