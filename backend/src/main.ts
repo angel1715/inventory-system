@@ -42,6 +42,7 @@ async function bootstrap() {
     
     origin: [
       frontendUrl,
+      'http://localhost:3000',
       /\.vercel\.app$/ 
     ] as (string | RegExp)[],
     credentials: true,

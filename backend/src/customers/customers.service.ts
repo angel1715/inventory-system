@@ -181,6 +181,18 @@ export class CustomersService {
 
                 remainingPayment -= paymentForThisAR;
                 totalPaid += paymentForThisAR;
+
+                await tx.creditMovement.create({
+                    data: {
+                        creditAccountId: account.id,
+                        type: "PAYMENT",
+                        amount: paymentForThisAR,
+                        saleId: ar.saleId,
+                        currentDebtSnapshot: this.round(Number(account.currentDebt) - totalPaid),
+                        note: dto.note ?? "Abono a cuenta",
+                        cashSessionId: activeSession.id,
+                    },
+                });
             }
 
             // 4. Actualizar saldo final del cliente
@@ -190,18 +202,6 @@ export class CustomersService {
                 data: { currentDebt: newDebt }
             });
 
-            // 5. Registro de movimientos (Auditoría)
-            await tx.creditMovement.create({
-                data: {
-                    creditAccountId: account.id,
-                    type: "PAYMENT",
-                    amount: totalPaid,
-                    saleId: pendingARs[0]?.saleId, // Referencia a la primera factura afectada
-                    currentDebtSnapshot: newDebt,
-                    note: dto.note ?? "Abono a cuenta",
-                    cashSessionId: activeSession.id,
-                },
-            });
 
             await tx.cashMovement.create({
                 data: {

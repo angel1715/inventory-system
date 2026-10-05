@@ -7,14 +7,611 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// ENUMS
-// ==========================================
+model Business {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  phone              String?
+  email              String              @unique
+  address            String?
+  logoUrl            String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  settings           BusinessSettings?
+  cashSessions       CashSession[]
+  creditAccounts     CreditAccount[]     @relation("BusinessCredits")
+  creditNotes        CreditNote[]
+  customers          Customer[]          @relation("BusinessCustomers")
+  expenses           Expense[]
+  inventoryMovements InventoryMovement[]
+  manualPayments     ManualPaymentLog[]
+  ncfSequences       NcfSequence[]       @relation("BusinessNcf")
+  products           Product[]
+  purchases          Purchase[]
+  sales              Sale[]
+  serviceOrders      ServiceOrder[]      @relation("BusinessServices")
+  subscription       Subscription?
+  suppliers          Supplier[]
+  users              User[]
+}
+
+model BusinessSettings {
+  id            String   @id @default(cuid())
+  businessName  String
+  phone         String?
+  address       String?
+  logoUrl       String?
+  taxRate       Float    @default(18)
+  currency      String   @default("DOP")
+  invoiceFooter String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  email         String?
+  facebook      String?
+  instagram     String?
+  website       String?
+  businessId    String   @unique
+  city          String?
+  country       String?
+  rnc           String?
+  tradeName     String?
+  useItbis      Boolean  @default(false)
+  useNcf        Boolean  @default(false)
+  ecfApiKey     String?
+  ecfBaseUrl    String?
+  ecfEnabled    Boolean  @default(false)
+  ecfTaxId      Int?
+  business      Business @relation(fields: [businessId], references: [id])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  businessId           String             @unique
+  userId               String?            @unique
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  accessType           String             @default("TRIAL")
+  subscriptionStatus   SubscriptionStatus @default(ACTIVE)
+  business             Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                 User?              @relation("UserSubscription", fields: [userId], references: [id])
+}
+
+model ManualPaymentLog {
+  id              String   @id @default(cuid())
+  businessId      String
+  amount          Decimal
+  referenceNumber String   @unique
+  receiptUrl      String
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  business        Business @relation(fields: [businessId], references: [id])
+}
+
+model User {
+  id                    String               @id @default(cuid())
+  name                  String
+  email                 String               @unique
+  password              String
+  role                  Role                 @default(OWNER)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  active                Boolean              @default(true)
+  businessId            String?
+  stripeCustomerId      String?              @unique
+  createdReceivables    AccountsReceivable[] @relation("ReceivableCreatedBy")
+  auditLogs             AuditLog[]
+  cashSessions          CashSession[]
+  inventoryMovements    InventoryMovement[]
+  sales                 Sale[]
+  serviceLogs           ServiceLog[]
+  deliveredServices     ServiceOrder[]       @relation("DeliveredServices")
+  receivedServices      ServiceOrder[]       @relation("ReceivedServices")
+  assignedServices      ServiceOrder[]       @relation("TechnicianServices")
+  uploadedServicePhotos ServicePhoto[]
+  subscription          Subscription?        @relation("UserSubscription")
+  business              Business?            @relation(fields: [businessId], references: [id])
+  passwordResetTokens   PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+model Invitation {
+  id        String   @id @default(cuid())
+  email     String?
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Supplier {
+  id         String     @id @default(cuid())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  createdAt  DateTime   @default(now())
+  businessId String
+  products   Product[]
+  purchases  Purchase[]
+  business   Business   @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+}
+
+model Product {
+  id             String              @id @default(cuid())
+  sku            String?             @unique
+  barcode        String?             @unique
+  name           String
+  description    String?
+  costPrice      Decimal
+  salePrice      Decimal
+  stock          Int
+  minStock       Int
+  active         Boolean             @default(true)
+  supplierId     String?
+  imageUrl       String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  businessId     String
+  category       ProductCategory     @default(OTHER)
+  expiryDate     DateTime?
+  hasExpiry      Boolean             @default(false)
+  isSerialized   Boolean             @default(false)
+  lotNumber      String?
+  status         String              @default("AVAILABLE")
+  inventoryMoves InventoryMovement[]
+  itemSerials    ItemSerial[]
+  business       Business            @relation(fields: [businessId], references: [id])
+  supplier       Supplier?           @relation(fields: [supplierId], references: [id])
+  productBatches ProductBatch[]
+  purchaseItems  PurchaseItem[]
+  saleItems      SaleItem[]
+  serviceItems   ServiceItem[]
+
+  @@index([businessId])
+  @@index([barcode])
+  @@index([name])
+}
+
+model ItemSerial {
+  id             String        @id @default(cuid())
+  serial         String
+  isSold         Boolean       @default(false)
+  productId      String
+  purchaseItemId String?
+  saleItemId     String?
+  createdAt      DateTime      @default(now())
+  product        Product       @relation(fields: [productId], references: [id])
+  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id])
+
+  @@unique([serial, productId])
+}
+
+model ProductBatch {
+  id              String        @id @default(cuid())
+  batchNumber     String
+  expiryDate      DateTime
+  initialQuantity Int
+  currentQuantity Int
+  productId       String
+  purchaseItemId  String?
+  createdAt       DateTime      @default(now())
+  product         Product       @relation(fields: [productId], references: [id])
+  purchaseItem    PurchaseItem? @relation(fields: [purchaseItemId], references: [id])
+
+  @@index([productId])
+}
+
+model Customer {
+  id                  String               @id @default(cuid())
+  name                String
+  phone               String?
+  active              Boolean              @default(true)
+  taxId               String?
+  email               String?
+  address             String?
+  businessId          String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  accountsReceivables AccountsReceivable[]
+  creditAccount       CreditAccount?
+  business            Business             @relation("BusinessCustomers", fields: [businessId], references: [id])
+  sales               Sale[]
+  serviceOrders       ServiceOrder[]
+
+  @@unique([businessId, taxId])
+  @@index([name])
+}
+
+model CreditAccount {
+  id          String           @id @default(cuid())
+  customerId  String           @unique
+  businessId  String
+  maxCredit   Decimal          @default(0.00)
+  currentDebt Decimal          @default(0.00)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  business    Business         @relation("BusinessCredits", fields: [businessId], references: [id])
+  customer    Customer         @relation(fields: [customerId], references: [id])
+  movements   CreditMovement[]
+
+  @@index([customerId])
+  @@index([businessId])
+}
+
+model CreditMovement {
+  id                  String             @id @default(cuid())
+  creditAccountId     String
+  type                CreditMovementType
+  amount              Decimal
+  currentDebtSnapshot Decimal
+  note                String?
+  saleId              String?
+  cashSessionId       String?
+  createdAt           DateTime           @default(now())
+  creditAccount       CreditAccount      @relation(fields: [creditAccountId], references: [id])
+  sale                Sale?              @relation(fields: [saleId], references: [id])
+
+  @@index([creditAccountId])
+}
+
+model NcfSequence {
+  id          String       @id @default(uuid())
+  businessId  String
+  type        String
+  prefix      String
+  current     Int
+  startAt     Int
+  endAt       Int
+  expiryDate  DateTime
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  creditNotes CreditNote[]
+  business    Business     @relation("BusinessNcf", fields: [businessId], references: [id])
+  sales       Sale[]
+
+  @@index([businessId, type, active])
+}
+
+model CreditNote {
+  id               String       @id @default(cuid())
+  businessId       String
+  saleId           String
+  ncf              String
+  ncfType          String
+  ncfSequenceId    String?
+  modificationCode String
+  baseAmount       Decimal
+  taxAmount        Decimal?
+  totalAmount      Decimal
+  reason           String?
+  ecfStatus        String?
+  ecfInvoiceId     Int?
+  ecfQrLink        String?
+  ecfMessage       String?
+  createdById      String?
+  createdAt        DateTime     @default(now())
+  business         Business     @relation(fields: [businessId], references: [id])
+  ncfSequence      NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
+  sale             Sale         @relation(fields: [saleId], references: [id])
+
+  @@index([businessId])
+  @@index([saleId])
+}
+
+model CashMovement {
+  id            String           @id @default(cuid())
+  cashSessionId String
+  type          CashMovementType
+  amount        Decimal
+  description   String
+  userId        String
+  createdAt     DateTime         @default(now())
+  cashSession   CashSession      @relation(fields: [cashSessionId], references: [id])
+
+  @@index([cashSessionId])
+}
+
+model Sale {
+  id                 String              @id @default(cuid())
+  invoiceNumber      String
+  subtotal           Decimal
+  tax                Decimal
+  discount           Decimal
+  total              Decimal
+  paymentMethod      PaymentMethod
+  cashSessionId      String?
+  createdAt          DateTime            @default(now())
+  createdById        String?
+  idempotencyKey     String
+  businessId         String
+  customerId         String?
+  isCreditSale       Boolean             @default(false)
+  ncf                String?
+  ncfSequenceId      String?
+  ncfType            String?
+  serviceOrderId     String?             @unique
+  ecfInvoiceId       Int?
+  ecfMessage         String?
+  ecfQrLink          String?
+  ecfStatus          String?
+  accountsReceivable AccountsReceivable?
+  creditMovements    CreditMovement[]
+  creditNotes        CreditNote[]
+  business           Business            @relation(fields: [businessId], references: [id])
+  cashSession        CashSession?        @relation(fields: [cashSessionId], references: [id])
+  createdBy          User?               @relation(fields: [createdById], references: [id])
+  customer           Customer?           @relation(fields: [customerId], references: [id])
+  ncfSequence        NcfSequence?        @relation(fields: [ncfSequenceId], references: [id])
+  serviceOrder       ServiceOrder?       @relation(fields: [serviceOrderId], references: [id])
+  items              SaleItem[]
+
+  @@unique([businessId, idempotencyKey])
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id                String   @id @default(cuid())
+  saleId            String
+  productId         String
+  quantity          Int
+  salePrice         Decimal
+  lineTotal         Decimal
+  serialNumber      String?
+  costPriceSnapshot Decimal?
+
+  product Product @relation(fields: [productId], references: [id])
+  sale    Sale    @relation(fields: [saleId], references: [id])
+
+  @@index([saleId])
+}
+
+model ServiceOrder {
+  id                  String         @id @default(cuid())
+  ticketNumber        String
+  businessId          String
+  customerId          String
+  technicianId        String?
+  deviceBrand         String
+  deviceModel         String
+  serialOrImei        String?
+  problem             String
+  diagnostic          String?
+  laborCost           Decimal        @default(0.00)
+  totalAmount         Decimal        @default(0.00)
+  status              ServiceStatus  @default(RECEIVED)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deliveredAt         DateTime?
+  accessories         Json?
+  batteryLevel        Int?
+  color               String?
+  cosmeticCondition   String?
+  deliveredById       String?
+  deviceTurnsOn       Boolean?
+  deviceType          DeviceType?
+  estimatedCost       Decimal?
+  estimatedDelivery   DateTime?
+  hasMemoryCard       Boolean        @default(false)
+  hasSim              Boolean        @default(false)
+  hasWaterDamage      Boolean?
+  observations        String?
+  password            String?
+  receivedById        String?
+  warrantyDays        Int?
+  warrantyUntil       DateTime?
+  customerApproved    Boolean        @default(false)
+  estimatedRepairTime String?
+  repairSolution      String?
+  sale                Sale?
+  items               ServiceItem[]
+  logs                ServiceLog[]
+  business            Business       @relation("BusinessServices", fields: [businessId], references: [id])
+  customer            Customer       @relation(fields: [customerId], references: [id])
+  deliveredBy         User?          @relation("DeliveredServices", fields: [deliveredById], references: [id])
+  receivedBy          User?          @relation("ReceivedServices", fields: [receivedById], references: [id])
+  technician          User?          @relation("TechnicianServices", fields: [technicianId], references: [id])
+  photos              ServicePhoto[]
+
+  @@unique([businessId, ticketNumber])
+  @@index([businessId])
+  @@index([status])
+  @@index([customerId])
+  @@index([receivedById])
+  @@index([technicianId])
+  @@index([deliveredById])
+  @@index([createdAt])
+}
+
+model ServicePhoto {
+  id             String           @id @default(cuid())
+  serviceOrderId String
+  imageUrl       String
+  type           ServicePhotoType @default(RECEPTION)
+  description    String?
+  uploadedById   String
+  createdAt      DateTime         @default(now())
+  serviceOrder   ServiceOrder     @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  uploadedBy     User             @relation(fields: [uploadedById], references: [id])
+
+  @@index([serviceOrderId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model ServiceItem {
+  id             String       @id @default(cuid())
+  serviceOrderId String
+  productId      String
+  quantity       Int          @default(1)
+  priceUnit      Decimal
+  createdAt      DateTime     @default(now())
+  lineTotal      Decimal      @default(0)
+  note           String?
+  product        Product      @relation(fields: [productId], references: [id])
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+
+  @@index([serviceOrderId])
+  @@index([productId])
+}
+
+model ServiceLog {
+  id             String       @id @default(cuid())
+  serviceOrderId String
+  statusFrom     String
+  statusTo       String
+  note           String?
+  userId         String
+  createdAt      DateTime     @default(now())
+  action         String       @default("SYSTEM")
+  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@index([serviceOrderId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model InventoryMovement {
+  id            String       @id @default(cuid())
+  productId     String
+  type          MovementType
+  quantity      Int
+  previousStock Int?
+  newStock      Int?
+  note          String?
+  createdAt     DateTime     @default(now())
+  userId        String?
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id])
+  product       Product      @relation(fields: [productId], references: [id])
+  user          User?        @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+}
+
+model AccountsReceivable {
+  id             String           @id @default(cuid())
+  saleId         String           @unique
+  customerId     String
+  originalAmount Decimal
+  paidAmount     Decimal          @default(0)
+  pendingAmount  Decimal
+  status         ReceivableStatus
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  notes          String?
+  createdById    String?
+  dueDate        DateTime
+  createdBy      User?            @relation("ReceivableCreatedBy", fields: [createdById], references: [id])
+  customer       Customer         @relation(fields: [customerId], references: [id])
+  sale           Sale             @relation(fields: [saleId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model Purchase {
+  id            String         @id @default(cuid())
+  invoiceNumber String
+  total         Decimal
+  supplierId    String
+  createdAt     DateTime       @default(now())
+  businessId    String
+  status        PurchaseStatus @default(COMPLETED)
+  business      Business       @relation(fields: [businessId], references: [id])
+  supplier      Supplier       @relation(fields: [supplierId], references: [id])
+  items         PurchaseItem[]
+
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId])
+}
+
+model PurchaseItem {
+  id         String         @id @default(cuid())
+  purchaseId String
+  productId  String
+  quantity   Int
+  costPrice  Decimal
+  total      Decimal
+  serials    ItemSerial[]
+  batches    ProductBatch[]
+  product    Product        @relation(fields: [productId], references: [id])
+  purchase   Purchase       @relation(fields: [purchaseId], references: [id])
+}
+
+model CashSession {
+  id            String         @id @default(cuid())
+  openingAmount Decimal
+  expectedCash  Decimal?
+  actualCash    Decimal?
+  difference    Decimal?
+  openedAt      DateTime       @default(now())
+  closedAt      DateTime?
+  status        CashStatus
+  businessId    String
+  userId        String
+  cashMovements CashMovement[]
+  business      Business       @relation(fields: [businessId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  expenses      Expense[]
+  sales         Sale[]
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  title         String
+  description   String?
+  amount        Decimal
+  category      ExpenseCategory
+  createdAt     DateTime        @default(now())
+  businessId    String
+  cashSessionId String?
+  business      Business        @relation(fields: [businessId], references: [id])
+  cashSession   CashSession?    @relation(fields: [cashSessionId], references: [id])
+
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entity      String
+  entityId    String?
+  description String?
+  userId      String
+  businessId  String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([businessId])
+  @@index([userId])
+}
 
 enum Role {
-  ADMIN
   OWNER
   EMPLOYEE
+  ADMIN
 }
 
 enum ExpenseCategory {
@@ -29,9 +626,9 @@ enum ExpenseCategory {
 
 enum MovementType {
   SALE
-  PURCHASE
   RESTOCK
   ADJUSTMENT
+  PURCHASE
   RETURN
 }
 
@@ -47,6 +644,11 @@ enum CashStatus {
   CLOSED
 }
 
+enum CashMovementType {
+  INCOME
+  EXPENSE
+}
+
 enum PurchaseStatus {
   DRAFT
   PENDING
@@ -60,7 +662,6 @@ enum NcfType {
   B14
   B15
 }
-
 
 enum ServiceStatus {
   RECEIVED
@@ -121,830 +722,4 @@ enum ServicePhotoType {
 enum SaleOrigin {
   POS
   SERVICE
-}
-
-// ==========================================
-// MODELS
-// ==========================================
-
-model Business {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  phone     String?
-  email     String   @unique
-  address   String?
-  logoUrl   String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users              User[]
-  products           Product[]
-  suppliers          Supplier[]
-  sales              Sale[]
-  cashSessions       CashSession[]
-  expenses           Expense[]
-  purchases          Purchase[]
-  inventoryMovements InventoryMovement[]
-  customers          Customer[]          @relation("BusinessCustomers")
-  creditAccounts     CreditAccount[]     @relation("BusinessCredits")
-  ncfSequences       NcfSequence[]       @relation("BusinessNcf")
-  serviceOrders      ServiceOrder[]      @relation("BusinessServices")
-  settings           BusinessSettings?
-  subscription       Subscription?
-  manualPayments     ManualPaymentLog[]
-  creditNotes        CreditNote[]
-}
-
-model BusinessSettings {
-  id           String  @id @default(cuid())
-  businessName String
-  tradeName    String?
-  rnc          String?
-  phone        String?
-  email        String?
-  website      String?
-  instagram    String?
-  facebook     String?
-  address      String?
-  city         String?
-  country      String?
-  logoUrl      String?
-
-  taxRate  Float  @default(18)
-  currency String @default("DOP")
-
-  // CONFIGURACIONES FISCALES
-  useItbis Boolean @default(false)
-  useNcf   Boolean @default(false)
-
-  // CONECTOR E-CF (RutiversoTech) - facturacion electronica DGII
-  ecfEnabled Boolean @default(false)
-  ecfApiKey  String?
-  ecfBaseUrl String?
-  ecfTaxId   Int?
-
-  invoiceFooter String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  businessId String @unique
-
-  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
-}
-
-model Subscription {
-  id String @id @default(cuid())
-
-  businessId String   @unique
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  // Campos para control de estado
-  accessType         String             @default("TRIAL")
-  currentPeriodEnd   DateTime
-  subscriptionStatus SubscriptionStatus @default(ACTIVE) // Nuevo
-
-  // Opcional para Stripe
-  stripeCustomerId     String? @unique
-  stripeSubscriptionId String? @unique
-  cancelAtPeriodEnd    Boolean @default(false)
-
-  // Relación con User (si es necesaria)
-  userId String? @unique
-  user   User?   @relation("UserSubscription", fields: [userId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// 2. Nuevo modelo para rastrear los comprobantes que te envían
-model ManualPaymentLog {
-  id              String   @id @default(cuid())
-  businessId      String
-  amount          Decimal
-  referenceNumber String   @unique
-  receiptUrl      String
-  status          String   @default("PENDING")
-  createdAt       DateTime @default(now())
-
-  business Business @relation(fields: [businessId], references: [id])
-}
-
-model User {
-  id               String  @id @default(cuid())
-  name             String
-  email            String  @unique
-  stripeCustomerId String? @unique
-  password         String
-  role             Role    @default(OWNER)
-  active           Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  //---------------------------------------------------
-  // RELACIÓN CON NEGOCIO
-  //---------------------------------------------------
-
-  businessId String?
-  business   Business? @relation(fields: [businessId], references: [id])
-
-  //---------------------------------------------------
-  // SUSCRIPCIÓN
-  //---------------------------------------------------
-
-  subscription Subscription? @relation("UserSubscription")
-
-  passwordResetTokens PasswordResetToken[]
-
-  //---------------------------------------------------
-  // VENTAS
-  //---------------------------------------------------
-
-  sales Sale[]
-
-  //---------------------------------------------------
-  // CAJA
-  //---------------------------------------------------
-
-  cashSessions CashSession[]
-
-  //---------------------------------------------------
-  // INVENTARIO
-  //---------------------------------------------------
-
-  inventoryMovements InventoryMovement[]
-
-  //---------------------------------------------------
-  // AUDITORÍA
-  //---------------------------------------------------
-
-  auditLogs AuditLog[]
-
-  //---------------------------------------------------
-  // SERVICIO TÉCNICO
-  //---------------------------------------------------
-
-  receivedServices ServiceOrder[] @relation("ReceivedServices")
-
-  assignedServices ServiceOrder[] @relation("TechnicianServices")
-
-  deliveredServices ServiceOrder[] @relation("DeliveredServices")
-
-  serviceLogs ServiceLog[]
-
-  uploadedServicePhotos ServicePhoto[]
-
-  //---------------------------------------------------
-  // CUENTAS POR COBRAR
-  //---------------------------------------------------
-
-  createdReceivables AccountsReceivable[] @relation("ReceivableCreatedBy")
-}
-
-model PasswordResetToken {
-  id        String   @id @default(uuid())
-  token     String   @unique // Aquí guardaremos el hash del token
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([token]) // Optimiza la búsqueda al validar el token
-  @@map("password_reset_tokens")
-}
-
-model Invitation {
-  id        String   @id @default(cuid())
-  email     String? // Email al que le enviamos la invitación
-  token     String   @unique
-  expiresAt DateTime
-  used      Boolean  @default(false)
-  createdAt DateTime @default(now())
-}
-
-model Supplier {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  email     String?
-  address   String?
-  createdAt DateTime @default(now())
-
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
-
-  products  Product[]
-  purchases Purchase[]
-
-  @@index([businessId])
-}
-
-model Product {
-  id          String          @id @default(cuid())
-  status      String          @default("AVAILABLE")
-  sku         String?         @unique
-  barcode     String?         @unique
-  name        String
-  description String?
-  costPrice   Decimal
-  salePrice   Decimal
-  stock       Int
-  minStock    Int
-  active      Boolean         @default(true)
-  imageUrl    String?
-  category    ProductCategory @default(OTHER)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  isSerialized Boolean   @default(false)
-  hasExpiry    Boolean   @default(false)
-  expiryDate   DateTime?
-  lotNumber    String?
-
-  businessId String
-  business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  supplierId String?
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
-
-  itemSerials    ItemSerial[]
-  productBatches ProductBatch[]
-  inventoryMoves InventoryMovement[]
-  purchaseItems  PurchaseItem[]
-  saleItems      SaleItem[]
-  serviceItems   ServiceItem[]
-
-  @@index([businessId])
-  @@index([barcode])
-  @@index([name])
-}
-
-model ItemSerial {
-  id     String  @id @default(cuid())
-  serial String
-  isSold Boolean @default(false)
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-
-  purchaseItemId String?
-  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
-
-  saleItemId String?
-  createdAt  DateTime @default(now())
-
-  @@unique([serial, productId])
-}
-
-model ProductBatch {
-  id              String   @id @default(cuid())
-  batchNumber     String
-  expiryDate      DateTime
-  initialQuantity Int
-  currentQuantity Int
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-
-  purchaseItemId String?
-  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-
-  @@index([productId])
-}
-
-model Customer {
-  id      String  @id @default(cuid())
-  name    String
-  phone   String?
-  active  Boolean @default(true)
-  taxId   String?
-  email   String?
-  address String?
-
-  businessId String
-  business   Business @relation("BusinessCustomers", fields: [businessId], references: [id], onDelete: Restrict)
-
-  sales               Sale[]
-  creditAccount       CreditAccount?
-  serviceOrders       ServiceOrder[]
-  accountsReceivables AccountsReceivable[]
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-
-  @@unique([businessId, taxId])
-  @@index([name])
-}
-
-model CreditAccount {
-  id         String   @id @default(cuid())
-  customerId String   @unique
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
-
-  businessId String
-  business   Business @relation("BusinessCredits", fields: [businessId], references: [id], onDelete: Restrict)
-
-  maxCredit   Decimal @default(0.00)
-  currentDebt Decimal @default(0.00)
-
-  movements CreditMovement[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-
-  @@index([customerId])
-  @@index([businessId])
-}
-
-model CreditMovement {
-  id                  String             @id @default(cuid())
-  creditAccountId     String
-  creditAccount       CreditAccount      @relation(fields: [creditAccountId], references: [id], onDelete: Restrict)
-  type                CreditMovementType
-  amount              Decimal
-  currentDebtSnapshot Decimal
-  note                String?
-  saleId              String?
-  sale                Sale?              @relation(fields: [saleId], references: [id])
-  cashSessionId       String?
-  createdAt           DateTime           @default(now())
-
-  @@index([creditAccountId])
-}
-
-model NcfSequence {
-  id         String   @id @default(uuid())
-  businessId String
-  type       String
-  prefix     String
-  current    Int
-  startAt    Int
-  endAt      Int
-  expiryDate DateTime
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  business    Business     @relation("BusinessNcf", fields: [businessId], references: [id], onDelete: Restrict)
-  sales       Sale[]
-  creditNotes CreditNote[]
-
-  @@index([businessId, type, active])
-}
-
-model CreditNote {
-  id               String       @id @default(cuid())
-  businessId       String
-  business         Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  saleId           String
-  sale             Sale         @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  ncf              String
-  ncfType          String
-  ncfSequenceId    String?
-  ncfSequence      NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
-  modificationCode String
-  baseAmount       Decimal
-  taxAmount        Decimal?
-  totalAmount      Decimal
-  reason           String?
-
-  // CONECTOR E-CF (RutiversoTech) - estado del envio a DGII
-  ecfStatus    String?
-  ecfInvoiceId Int?
-  ecfQrLink    String?
-  ecfMessage   String?
-
-  createdById String?
-  createdAt   DateTime @default(now())
-
-  @@index([businessId])
-  @@index([saleId])
-}
-
-model CashMovement {
-  id            String      @id @default(cuid())
-  cashSessionId String
-  cashSession   CashSession @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
-  type          String
-  amount        Decimal
-  description   String
-  userId        String
-  createdAt     DateTime    @default(now())
-
-  @@index([cashSessionId])
-}
-
-model Sale {
-  id             String @id @default(cuid())
-  invoiceNumber  String
-  businessId     String
-  idempotencyKey String
-
-  ncf           String?
-  ncfType       String?
-  ncfSequenceId String?
-  ncfSequence   NcfSequence? @relation(fields: [ncfSequenceId], references: [id])
-
-  // CONECTOR E-CF (RutiversoTech) - estado del envio a DGII
-  ecfStatus    String?
-  ecfInvoiceId Int?
-  ecfQrLink    String?
-  ecfMessage   String?
-  creditNotes  CreditNote[]
-
-  subtotal      Decimal
-  tax           Decimal
-  discount      Decimal
-  total         Decimal
-  paymentMethod PaymentMethod
-
-  cashSessionId String?
-  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id])
-  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  createdById   String?
-  createdBy     User?        @relation(fields: [createdById], references: [id])
-
-  isCreditSale       Boolean             @default(false)
-  customerId         String?
-  customer           Customer?           @relation(fields: [customerId], references: [id])
-  creditMovements    CreditMovement[]
-  items              SaleItem[]
-  accountsReceivable AccountsReceivable?
-
-  //---------------------------------------------------
-  // REPARACIONES
-  //---------------------------------------------------
-
-  serviceOrderId String? @unique
-
-  serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
-  createdAt    DateTime      @default(now())
-
-  @@unique([businessId, idempotencyKey])
-  @@index([businessId])
-  @@index([createdAt])
-}
-
-model SaleItem {
-  id           String  @id @default(cuid())
-  saleId       String
-  productId    String
-  quantity     Int
-  salePrice    Decimal
-  lineTotal    Decimal
-  serialNumber String?
-
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  product Product @relation(fields: [productId], references: [id])
-
-  @@index([saleId])
-}
-
-model ServiceOrder {
-  id           String @id @default(cuid())
-  ticketNumber String
-
-  //---------------------------------------------------
-  // RELACIONES
-  //---------------------------------------------------
-
-  businessId String
-  business   Business @relation("BusinessServices", fields: [businessId], references: [id], onDelete: Restrict)
-
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  receivedById String?
-  receivedBy   User?   @relation("ReceivedServices", fields: [receivedById], references: [id])
-
-  technicianId String?
-  technician   User?   @relation("TechnicianServices", fields: [technicianId], references: [id])
-
-  deliveredById String?
-  deliveredBy   User?   @relation("DeliveredServices", fields: [deliveredById], references: [id])
-
-  //---------------------------------------------------
-  // INFORMACIÓN DEL EQUIPO
-  //---------------------------------------------------
-
-  deviceType DeviceType?
-
-  deviceBrand String
-
-  deviceModel String
-
-  serialOrImei String?
-
-  color String?
-
-  password String?
-
-  accessories Json?
-
-  cosmeticCondition String?
-
-  batteryLevel Int?
-
-  hasSim Boolean @default(false)
-
-  hasMemoryCard Boolean @default(false)
-
-  deviceTurnsOn Boolean?
-
-  hasWaterDamage Boolean?
-
-  //---------------------------------------------------
-  // RECEPCIÓN
-  //---------------------------------------------------
-
-  problem String
-
-  observations String?
-
-  estimatedDelivery DateTime?
-
-  //---------------------------------------------------
-  // DIAGNÓSTICO
-  //---------------------------------------------------
-
-  diagnostic String?
-
-  repairSolution String?
-
-  estimatedRepairTime String?
-
-  estimatedCost Decimal?
-
-  customerApproved Boolean @default(false)
-
-  laborCost Decimal @default(0.00)
-
-  totalAmount Decimal @default(0.00)
-
-  //---------------------------------------------------
-  // GARANTÍA
-  //---------------------------------------------------
-
-  warrantyDays Int?
-
-  warrantyUntil DateTime?
-
-  //---------------------------------------------------
-  // ESTADO
-  //---------------------------------------------------
-
-  status ServiceStatus @default(RECEIVED)
-
-  deliveredAt DateTime?
-
-  //---------------------------------------------------
-  // RELACIONES
-  //---------------------------------------------------
-
-  items ServiceItem[]
-
-  logs ServiceLog[]
-
-  photos ServicePhoto[]
-
-  sale Sale?
-
-  //---------------------------------------------------
-
-  createdAt DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
-
-  @@unique([businessId, ticketNumber])
-  @@index([businessId])
-  @@index([status])
-  @@index([customerId])
-  @@index([receivedById])
-  @@index([technicianId])
-  @@index([deliveredById])
-  @@index([createdAt])
-}
-
-model ServicePhoto {
-  id String @id @default(cuid())
-
-  //---------------------------------------------------
-  // RELACIÓN
-  //---------------------------------------------------
-
-  serviceOrderId String
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
-
-  //---------------------------------------------------
-  // INFORMACIÓN DE LA FOTO
-  //---------------------------------------------------
-
-  imageUrl String
-
-  type ServicePhotoType @default(RECEPTION)
-
-  description String?
-
-  //---------------------------------------------------
-  // AUDITORÍA
-  //---------------------------------------------------
-
-  uploadedById String
-  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
-
-  createdAt DateTime @default(now())
-
-  //---------------------------------------------------
-
-  @@index([serviceOrderId])
-  @@index([type])
-  @@index([createdAt])
-}
-
-model ServiceItem {
-  id String @id @default(cuid())
-
-  //---------------------------------------------------
-  // RELACIONES
-  //---------------------------------------------------
-
-  serviceOrderId String
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  //---------------------------------------------------
-  // INFORMACIÓN DEL REPUESTO
-  //---------------------------------------------------
-
-  quantity Int @default(1)
-
-  priceUnit Decimal
-
-  lineTotal Decimal @default(0)
-
-  note String?
-
-  createdAt DateTime @default(now())
-
-  //---------------------------------------------------
-
-  @@index([serviceOrderId])
-  @@index([productId])
-}
-
-model ServiceLog {
-  id String @id @default(cuid())
-
-  //---------------------------------------------------
-  // RELACIONES
-  //---------------------------------------------------
-
-  serviceOrderId String
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Restrict)
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  //---------------------------------------------------
-  // EVENTO
-  //---------------------------------------------------
-
-  statusFrom String
-
-  statusTo String
-
-  action String @default("SYSTEM")
-
-  note String?
-
-  //---------------------------------------------------
-
-  createdAt DateTime @default(now())
-
-  @@index([serviceOrderId])
-  @@index([userId])
-  @@index([createdAt])
-}
-
-model InventoryMovement {
-  id            String       @id @default(cuid())
-  productId     String
-  product       Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
-  userId        String?
-  user          User?        @relation(fields: [userId], references: [id])
-  businessId    String
-  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  type          MovementType
-  quantity      Int
-  previousStock Int?
-  newStock      Int?
-  note          String?
-  createdAt     DateTime     @default(now())
-
-  @@index([productId])
-}
-
-model AccountsReceivable {
-  id             String           @id @default(cuid())
-  saleId         String           @unique
-  sale           Sale             @relation(fields: [saleId], references: [id])
-  customerId     String
-  customer       Customer         @relation(fields: [customerId], references: [id])
-  originalAmount Decimal
-  paidAmount     Decimal          @default(0)
-  pendingAmount  Decimal
-  status         ReceivableStatus
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  notes          String?
-  createdById    String?
-  createdBy      User?            @relation("ReceivableCreatedBy", fields: [createdById], references: [id])
-  dueDate        DateTime
-
-  @@index([customerId])
-  @@index([status])
-}
-
-model Purchase {
-  id            String         @id @default(cuid())
-  invoiceNumber String
-  total         Decimal
-  status        PurchaseStatus @default(COMPLETED)
-  businessId    String
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  supplierId    String
-  supplier      Supplier       @relation(fields: [supplierId], references: [id])
-  items         PurchaseItem[]
-  createdAt     DateTime       @default(now())
-
-  @@unique([businessId, invoiceNumber])
-  @@index([businessId])
-}
-
-model PurchaseItem {
-  id         String   @id @default(cuid())
-  purchaseId String
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
-  productId  String
-  product    Product  @relation(fields: [productId], references: [id])
-  quantity   Int
-  costPrice  Decimal
-  total      Decimal
-
-  serials ItemSerial[]
-  batches ProductBatch[]
-}
-
-model CashSession {
-  id            String         @id @default(cuid())
-  openingAmount Decimal
-  expectedCash  Decimal?
-  actualCash    Decimal?
-  difference    Decimal?
-  openedAt      DateTime       @default(now())
-  closedAt      DateTime?
-  status        CashStatus
-  userId        String
-  user          User           @relation(fields: [userId], references: [id])
-  businessId    String
-  business      Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  sales         Sale[]
-  expenses      Expense[]
-  cashMovements CashMovement[]
-}
-
-model Expense {
-  id            String          @id @default(cuid())
-  title         String
-  description   String?
-  amount        Decimal
-  category      ExpenseCategory
-  businessId    String
-  business      Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  createdAt     DateTime        @default(now())
-  cashSessionId String?
-  cashSession   CashSession?    @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
-
-  @@index([businessId])
-  @@index([createdAt])
-}
-
-model AuditLog {
-  id          String   @id @default(cuid())
-  action      String
-  entity      String
-  entityId    String?
-  description String?
-  userId      String
-  businessId  String
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  @@index([businessId])
-  @@index([userId])
 }
