@@ -49,9 +49,9 @@ export default function InventoryPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              Inventory Movements
+              Movimientos de Inventario
             </h1>
-            <p className="text-gray-500">Track stock changes and audits</p>
+            <p className="text-gray-500">Rastrear Cambios de inventario y auditorias</p>
           </div>
           <Link
             href="/dashboard"
@@ -64,7 +64,7 @@ export default function InventoryPage() {
         <div className="mb-6">
           <input
             type="text"
-            placeholder="Search product or note..."
+            placeholder="Buscar Producto nota..."
             value={search}
             onChange={(e) => {
               setPage(1);
@@ -89,23 +89,23 @@ export default function InventoryPage() {
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Product
+                      Producto
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Type
+                      Tipo
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Quantity
+                      Cantidad
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Previous
+                      Anterior
                     </th>
-                    <th className="text-left p-4 text-sm text-gray-500">New</th>
+                    <th className="text-left p-4 text-sm text-gray-500">Nuevo</th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Date
+                      Fecha
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Note
+                      Nota
                     </th>
                   </tr>
                 </thead>
@@ -146,19 +146,19 @@ export default function InventoryPage() {
             <button
               disabled={page === 1}
               onClick={() => setPage((prev) => prev - 1)}
-              className="px-4 py-2 rounded-xl border disabled:opacity-50 text-gray-600"
+              className="bg-black px-4 py-2 rounded-xl border disabled:opacity-50"
             >
-              Previous
+              Anterior
             </button>
             <p className="text-sm text-gray-600">
-              Page {page} of {totalPages}
+              Pagina {page} de {totalPages}
             </p>
             <button
               disabled={page === totalPages}
               onClick={() => setPage((prev) => prev + 1)}
-              className="px-4 py-2 rounded-xl border disabled:opacity-50 text-gray-600"
+              className="bg-black px-4 py-2 rounded-xl border disabled:opacity-50"
             >
-              Next
+              Siguiente
             </button>
           </div>
         </div>

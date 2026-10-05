@@ -95,8 +95,13 @@ export const updateSettings = (data: any) =>
 // =========================
 // DASHBOARD
 // =========================
-export const getDashboard = (range: string) =>
-  request(`/sales/dashboard?range=${range}`);
+export const getDashboard = (startDate?: string, endDate?: string) => {
+  const params = new URLSearchParams();
+  if (startDate) params.append("startDate", startDate);
+  if (endDate) params.append("endDate", endDate);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  return request(`/sales/dashboard${query}`);
+};
 
 // =========================
 // FINANCIAL METRICS (Criterio de Caja)

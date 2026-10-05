@@ -103,15 +103,13 @@ export default function DashboardPage() {
       const { startDate, endDate } = getDateRangeParams(currentRange);
 
       const [dashboard, cashSession, lowStock, metrics] = await Promise.all([
-        getDashboard(currentRange),
-        getCashSession(),
-        getLowStockProducts(),
-        getSalesMetrics(startDate, endDate), // 👈 Llamamos a nuestro nuevo endpoint financiero
-      ]);
+  getDashboard(startDate, endDate), // 👈 Le pasamos las fechas reales
+  getCashSession(),
+  getLowStockProducts(),
+  getSalesMetrics(startDate, endDate),
+]);
 
-      console.log("DASHBOARD RESPONSE:", dashboard); // 👈 Revisa esto en la consola del navegador
-      console.log("METRICS RESPONSE:", metrics); // 👈 Y esto también
-
+     
       setStats({
         ...dashboard,
         metrics, // 👈 Guardamos las métricas financieras avanzadas aquí
@@ -149,14 +147,13 @@ export default function DashboardPage() {
   const totalAccountsReceivable = stats?.accountsReceivable || 0;
   const creditNotCollected = stats?.creditPending || 0;
 
-  const financialMetrics = stats?.metrics;
-  const grossSales = financialMetrics?.revenue?.grossSales || realRevenue;
-  const cashCollected = financialMetrics?.revenue?.cashCollected || 0;
-  const totalCogs = financialMetrics?.costs?.cogs || 0;
-  const totalLaborCost = financialMetrics?.costs?.laborCost || 0;
-  const grossProfit =
-    financialMetrics?.profitability?.grossProfit || realProfit;
-  const profitMargin = financialMetrics?.profitability?.profitMargin || 0;
+    const financialMetrics = stats?.metrics;
+  const grossSales = financialMetrics?.revenue?.grossSales ?? realRevenue;
+      const cashCollected = cash?.expectedCash ?? 0;
+  const totalCogs = financialMetrics?.costs?.cogs ?? 0;
+  const totalLaborCost = financialMetrics?.costs?.laborCost ?? 0;
+  const grossProfit = financialMetrics?.profitability?.grossProfit ?? realProfit;
+  const profitMargin = financialMetrics?.profitability?.profitMargin ?? 0;
 
   if (authLoading || loading) {
     return (
@@ -206,7 +203,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           {[
             {
-              label: "Efectivo Recaudado (Caja)",
+              label: "Efectivo Esperado en Caja",
               value: cashCollected, // 👈 Usamos el flujo de caja real por criterio de caja
               icon: <Wallet size={20} className="text-emerald-600" />,
             },

@@ -167,7 +167,7 @@ export default function ServiceOrderDetailPage() {
     try {
       const data = await getProducts();
       setProducts(data);
-      setIsItemModalOpen(true);
+      setIsItemModalOpen(true); 
     } catch {
       toast.error("Error al cargar productos");
     }
