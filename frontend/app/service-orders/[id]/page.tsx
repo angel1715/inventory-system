@@ -10,11 +10,47 @@ import {
   updateLaborCost,
   updateServiceOrder,
   invoiceServiceOrder,
+  deliverServiceOrder,
+  removeServiceItem,
+  getUsers,
+    assignServiceTechnician,
+  getTrackingLink,
+  resendReadyNotification,
 } from "@/lib/api";
 import toast from "react-hot-toast";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Trash2, Copy, MessageCircle, Mail } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
 import ReceiptModal from "@/components/receipt/ReceiptModal";
+import ServicePhotos from "@/components/services/ServicePhotos";
+
+const STATUS_LABELS: Record<string, string> = {
+  RECEIVED: "Recibido",
+  DIAGNOSING: "Diagnosticando",
+  REPAIRED: "Reparado",
+  READY_FOR_PICKUP: "Listo para retirar",
+  DELIVERED: "Entregado",
+  CANCELLED: "Cancelado",
+  NOT_REPAIRABLE: "Sin reparación posible",
+};
+
+// Debe mantenerse alineado con allowedTransitions del backend
+const NEXT_STATUSES: Record<string, string[]> = {
+  RECEIVED: ["DIAGNOSING", "CANCELLED"],
+  DIAGNOSING: ["REPAIRED", "NOT_REPAIRABLE", "CANCELLED"],
+  REPAIRED: ["READY_FOR_PICKUP"],
+  READY_FOR_PICKUP: [],
+  DELIVERED: [],
+  CANCELLED: [],
+  NOT_REPAIRABLE: [],
+};
+
+// WhatsApp necesita el número en formato internacional, sin "+".
+// En RD los números de 10 dígitos llevan el prefijo 1.
+function toWhatsAppPhone(raw?: string | null) {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (digits.length === 10) return `1${digits}`;
+  return digits;
+}
 
 export default function ServiceOrderDetailPage() {
   const params = useParams<{ id: string }>();
@@ -24,6 +60,17 @@ export default function ServiceOrderDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+
+  const [removingItemId, setRemovingItemId] = useState<string | null>(null);
+
+  const [isEditingTech, setIsEditingTech] = useState(false);
+  const [technicians, setTechnicians] = useState<any[]>([]);
+  const [selectedTechnician, setSelectedTechnician] = useState("");
+  const [assigningTech, setAssigningTech] = useState(false);
+
+    const [deliverLoading, setDeliverLoading] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+  const [notifyLoading, setNotifyLoading] = useState(false);
 
   const router = useRouter();
 
@@ -47,18 +94,35 @@ export default function ServiceOrderDetailPage() {
     deviceModel: "",
     serialOrImei: "",
     problem: "",
-
     diagnostic: "",
     repairSolution: "",
     estimatedRepairTime: "",
     customerApproved: false,
+    warrantyDays: 0,
   });
 
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-
   const [receiptOpen, setReceiptOpen] = useState(false);
-
   const [completedSale, setCompletedSale] = useState<any>(null);
+
+  const nextStatuses = NEXT_STATUSES[order?.status ?? ""] ?? [];
+
+  const canEditParts = ["RECEIVED", "DIAGNOSING", "REPAIRED"].includes(
+    order?.status ?? "",
+  );
+
+  const canAssignTechnician = ["RECEIVED", "DIAGNOSING", "REPAIRED"].includes(
+    order?.status ?? "",
+  );
+
+    const warrantyExpired =
+    !!order?.warrantyUntil && new Date(order.warrantyUntil) < new Date();
+
+  const openStatusModal = () => {
+    setNewStatus(nextStatuses[0] ?? "");
+    setChangeNote("");
+    setIsStatusModalOpen(true);
+  };
 
   useEffect(() => {
     if (id) loadOrder();
@@ -67,7 +131,7 @@ export default function ServiceOrderDetailPage() {
   async function loadOrder() {
     if (!id) return;
 
-    setLoading(true);
+    if (!order) setLoading(true);
 
     try {
       const data = await getServiceOrder(id);
@@ -80,11 +144,11 @@ export default function ServiceOrderDetailPage() {
         deviceModel: data.deviceModel ?? "",
         serialOrImei: data.serialOrImei ?? "",
         problem: data.problem ?? "",
-
         diagnostic: data.diagnostic ?? "",
         repairSolution: data.repairSolution ?? "",
         estimatedRepairTime: data.estimatedRepairTime ?? "",
         customerApproved: data.customerApproved ?? false,
+        warrantyDays: data.warrantyDays ?? 0,
       });
     } catch (err) {
       toast.error("Error al cargar detalles");
@@ -96,7 +160,6 @@ export default function ServiceOrderDetailPage() {
   const handleComplete = () => {
     if (order.status !== "READY_FOR_PICKUP") {
       toast.error("La reparación aún no está lista.");
-
       return;
     }
 
@@ -119,16 +182,9 @@ export default function ServiceOrderDetailPage() {
         ncfType: data.ncfType,
       });
 
-      // Guardamos la venta retornada por el backend.
       setCompletedSale(sale);
-
-      // Cerramos el modal de pago.
       setIsInvoiceModalOpen(false);
-
-      // Abrimos el recibo.
       setReceiptOpen(true);
-
-      // Actualizamos la orden.
       await loadOrder();
 
       if (sale.ncfType?.startsWith("E") && sale.ecfStatus === "failure") {
@@ -137,18 +193,142 @@ export default function ServiceOrderDetailPage() {
           { duration: 8000 },
         );
       } else {
-        toast.success("Reparación entregada y factura generada correctamente.");
+        toast.success("Factura generada. Ya puedes entregar el equipo.");
       }
     } catch (err: any) {
       console.error(err);
-
       toast.error(
         err?.response?.data?.message ||
-          err?.message ||
-          "No se pudo generar la factura.",
+        err?.message ||
+        "No se pudo generar la factura.",
       );
     } finally {
       setInvoiceLoading(false);
+    }
+  };
+
+  const handleDeliver = async () => {
+    try {
+      setDeliverLoading(true);
+      await deliverServiceOrder(id);
+      toast.success("Equipo entregado al cliente.");
+      await loadOrder();
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo registrar la entrega.");
+    } finally {
+      setDeliverLoading(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (!confirm("¿Quitar este repuesto de la orden?")) return;
+
+    try {
+      setRemovingItemId(itemId);
+      await removeServiceItem(id, itemId);
+      toast.success("Repuesto eliminado");
+      await loadOrder();
+    } catch (err: any) {
+      toast.error(err?.message || "Error al eliminar el repuesto");
+    } finally {
+      setRemovingItemId(null);
+    }
+  };
+
+  const handleToggleTechEditor = async () => {
+    if (isEditingTech) {
+      setIsEditingTech(false);
+      return;
+    }
+
+    try {
+      if (technicians.length === 0) {
+        const data = await getUsers();
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        setTechnicians(list.filter((u: any) => u.active !== false));
+      }
+      setSelectedTechnician(order.technicianId ?? "");
+      setIsEditingTech(true);
+    } catch {
+      toast.error("No se pudo cargar la lista de técnicos");
+    }
+  };
+
+  const handleAssignTechnician = async () => {
+    if (!selectedTechnician) return toast.error("Selecciona un técnico");
+
+    try {
+      setAssigningTech(true);
+      await assignServiceTechnician(id, selectedTechnician);
+      toast.success("Técnico asignado");
+      setIsEditingTech(false);
+      await loadOrder();
+    } catch (err: any) {
+      toast.error(err?.message || "Error al asignar el técnico");
+    } finally {
+      setAssigningTech(false);
+    }
+  };
+
+    const getTrackingUrl = async () => {
+    const { token } = await getTrackingLink(id);
+    return `${window.location.origin}/track/${token}`;
+  };
+
+  const handleCopyTrackingLink = async () => {
+    try {
+      setLinkLoading(true);
+      const url = await getTrackingUrl();
+      await navigator.clipboard.writeText(url);
+      toast.success("Link de seguimiento copiado");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo generar el link");
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const handleWhatsAppTrackingLink = async () => {
+    // Se abre la pestaña de inmediato para que el navegador no la bloquee
+    const win = window.open("", "_blank");
+
+    try {
+      setLinkLoading(true);
+      const url = await getTrackingUrl();
+
+      const firstName = order.customer?.name?.trim().split(/\s+/)[0] ?? "";
+      const greeting = firstName ? `Hola ${firstName}` : "Hola";
+      const text = `${greeting}, puedes ver el estado de tu reparación (${order.deviceBrand} ${order.deviceModel}, orden #${order.ticketNumber}) en este enlace: ${url}`;
+
+      const waUrl = `https://wa.me/${toWhatsAppPhone(order.customer?.phone)}?text=${encodeURIComponent(text)}`;
+
+      if (win) win.location.href = waUrl;
+      else window.open(waUrl, "_blank");
+    } catch (err: any) {
+      win?.close();
+      toast.error(err?.message || "No se pudo generar el link");
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+    const handleResendNotification = async () => {
+    try {
+      setNotifyLoading(true);
+      const result = await resendReadyNotification(id);
+
+      if (result?.sent) {
+        toast.success("Se notificó al cliente por email");
+        await loadOrder();
+      } else if (result?.reason === "NO_EMAIL") {
+        toast("El cliente no tiene email registrado.", { icon: "ℹ️" });
+      } else {
+        toast.error("No se pudo enviar el email al cliente.");
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo enviar el email");
+    } finally {
+      setNotifyLoading(false);
     }
   };
 
@@ -167,7 +347,7 @@ export default function ServiceOrderDetailPage() {
     try {
       const data = await getProducts();
       setProducts(data);
-      setIsItemModalOpen(true); 
+      setIsItemModalOpen(true);
     } catch {
       toast.error("Error al cargar productos");
     }
@@ -177,17 +357,17 @@ export default function ServiceOrderDetailPage() {
     if (!selectedProduct) return toast.error("Selecciona un producto");
 
     try {
-      setAddingItem(true); // 👈 Bloqueamos el botón
+      setAddingItem(true);
       await addServiceItem(id, { productId: selectedProduct, quantity });
       toast.success("Repuesto agregado");
       setIsItemModalOpen(false);
-      setSelectedProduct(""); // Opcional: limpiar selección
-      setQuantity(1); // Opcional: reiniciar cantidad
+      setSelectedProduct("");
+      setQuantity(1);
       loadOrder();
     } catch {
       toast.error("Error al agregar repuesto");
     } finally {
-      setAddingItem(false); // 👈 Liberamos el botón pase lo que pase
+      setAddingItem(false);
     }
   };
 
@@ -199,22 +379,16 @@ export default function ServiceOrderDetailPage() {
 
     try {
       setLoading(true);
-
       await updateServiceOrder(id, infoForm);
-
-      // Esperamos a que el backend nos devuelva la información actualizada.
       await loadOrder();
-
       setIsEditingInfo(false);
-
       toast.success("Diagnóstico guardado correctamente");
     } catch (err: any) {
       console.error(err);
-
       toast.error(
         err?.response?.data?.message ||
-          err?.message ||
-          "Error al actualizar la orden",
+        err?.message ||
+        "Error al actualizar la orden",
       );
     } finally {
       setLoading(false);
@@ -225,12 +399,28 @@ export default function ServiceOrderDetailPage() {
     if (!changeNote.trim()) return toast.error("La nota es obligatoria");
     if (newStatus === "DELIVERED") {
       return toast.error(
-        "Para entregar la orden, usa el botón verde 'Entregar Reparación'.",
+                "Para entregar la orden, usa el botón 'Entregar Equipo'.",
       );
     }
     try {
-      await updateServiceStatus(id, { status: newStatus, note: changeNote });
+            const result = await updateServiceStatus(id, {
+        status: newStatus,
+        note: changeNote,
+      });
       toast.success("Estatus actualizado");
+
+      if (newStatus === "READY_FOR_PICKUP") {
+        if (result?.notification?.sent) {
+          toast.success("Se notificó al cliente por email");
+        } else if (result?.notification?.reason === "NO_EMAIL") {
+          toast("El cliente no tiene email registrado. Avísale por WhatsApp.", {
+            icon: "ℹ️",
+            duration: 6000,
+          });
+        } else {
+          toast.error("No se pudo enviar el email al cliente.");
+        }
+      }
       setIsStatusModalOpen(false);
       setChangeNote("");
       loadOrder();
@@ -276,8 +466,8 @@ export default function ServiceOrderDetailPage() {
                   {order.customer?.name}
                 </p>
               </div>
-              <span className="px-5 py-2.5 rounded-2xl font-semibold text-sm bg-white/20 backdrop-blur-sm">
-                {order.status}
+              <span className="font-semibold px-4 py-2 bg-white/10 rounded-2xl">
+                {STATUS_LABELS[order.status] ?? order.status}
               </span>
             </div>
           </div>
@@ -328,12 +518,14 @@ export default function ServiceOrderDetailPage() {
                 <h3 className="font-semibold text-xl text-zinc-900">
                   Diagnóstico y Reparación
                 </h3>
-                <button
-                  onClick={() => setIsEditingInfo(!isEditingInfo)}
-                  className="text-blue-600 text-sm font-medium hover:underline"
-                >
-                  {isEditingInfo ? "Cancelar" : "Editar Diagnóstico"}
-                </button>
+                                {canEditParts && (
+                  <button
+                    onClick={() => setIsEditingInfo(!isEditingInfo)}
+                    className="text-blue-600 text-sm font-medium hover:underline"
+                  >
+                    {isEditingInfo ? "Cancelar" : "Editar Diagnóstico"}
+                  </button>
+                )}
               </div>
 
               {isEditingInfo ? (
@@ -367,6 +559,52 @@ export default function ServiceOrderDetailPage() {
                       className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-3 min-h-[100px]"
                     />
                   </div>
+
+                                    <div>
+                    <label className="text-sm text-zinc-500 block mb-1">
+                      Garantía de la reparación
+                    </label>
+                    <select
+                      value={infoForm.warrantyDays}
+                      onChange={(e) =>
+                        setInfoForm({
+                          ...infoForm,
+                          warrantyDays: Number(e.target.value),
+                        })
+                      }
+                      className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-3"
+                    >
+                      <option value={0}>Sin garantía</option>
+                      <option value={7}>7 días</option>
+                      <option value={15}>15 días</option>
+                      <option value={30}>30 días</option>
+                      <option value={60}>60 días</option>
+                      <option value={90}>90 días</option>
+                      <option value={180}>6 meses (180 días)</option>
+                      <option value={365}>1 año (365 días)</option>
+                    </select>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Se cuenta desde el día en que se entrega el equipo.
+                    </p>
+                  </div>
+
+                  <label className="flex items-center gap-3 p-4 bg-zinc-50 rounded-2xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={infoForm.customerApproved}
+                      onChange={(e) =>
+                        setInfoForm({
+                          ...infoForm,
+                          customerApproved: e.target.checked,
+                        })
+                      }
+                      className="w-5 h-5 accent-green-600"
+                    />
+                    <span className="text-zinc-700 font-medium">
+                      El cliente aprobó la cotización
+                    </span>
+                  </label>
+
                   <button
                     onClick={handleUpdateInfo}
                     className="w-full py-3 bg-zinc-900 text-white rounded-2xl font-semibold hover:bg-zinc-800 transition"
@@ -388,9 +626,37 @@ export default function ServiceOrderDetailPage() {
                     <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
                       Solución Registrada
                     </p>
-                    <p className="text-zinc-700 whitespace-pre-wrap">
+                    <p className="text-zinc-700 whitespace-pre-wrap mb-4">
                       {order.repairSolution || "Sin solución registrada."}
                     </p>
+
+                                        <div className="flex flex-wrap gap-2">
+                      <span
+                        className={`inline-block px-4 py-2 rounded-2xl text-sm font-medium ${
+                          order.customerApproved
+                            ? "bg-green-100 text-green-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {order.customerApproved
+                          ? "Cotización aprobada por el cliente"
+                          : "Pendiente de aprobación del cliente"}
+                      </span>
+
+                      {(order.warrantyDays ?? 0) > 0 && (
+                        <span
+                          className={`inline-block px-4 py-2 rounded-2xl text-sm font-medium ${
+                            warrantyExpired
+                              ? "bg-red-100 text-red-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {order.warrantyUntil
+                            ? `${warrantyExpired ? "Garantía vencida el" : "Garantía hasta el"} ${new Date(order.warrantyUntil).toLocaleDateString()}`
+                            : `Garantía: ${order.warrantyDays} días tras la entrega`}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -430,6 +696,14 @@ export default function ServiceOrderDetailPage() {
                 </div>
               </div>
             </div>
+
+            {/* Fotos del Equipo */}
+            <ServicePhotos
+              orderId={id}
+              photos={order.photos || []}
+              onChange={loadOrder}
+              disabled={order.status === "DELIVERED"}
+            />
 
             {/* Accesorios */}
             <div className="bg-white rounded-3xl border border-zinc-100 shadow-sm">
@@ -471,19 +745,32 @@ export default function ServiceOrderDetailPage() {
               <h3 className="font-semibold text-xl text-zinc-900 mb-6">
                 Repuestos Utilizados
               </h3>
-              {order.items?.length > 0 ? (
+              {order.items?.length ? (
                 <div className="space-y-3">
                   {order.items.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex justify-between items-center py-3 border-b border-zinc-100 last:border-0"
+                      className="flex justify-between items-center gap-3 py-3 border-b border-zinc-100 last:border-0"
                     >
-                      <span className="text-zinc-700">
+                      <span className="text-zinc-700 flex-1">
                         {item.product?.name} ×{item.quantity}
                       </span>
                       <span className="font-semibold text-zinc-900">
-                        RD$ {(item.priceUnit * item.quantity).toLocaleString()}
+                        RD${" "}
+                        {(
+                          Number(item.priceUnit) * item.quantity
+                        ).toLocaleString()}
                       </span>
+                      {canEditParts && (
+                        <button
+                          onClick={() => handleRemoveItem(item.id)}
+                          disabled={removingItemId === item.id}
+                          title="Quitar repuesto"
+                          className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition disabled:opacity-50"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -500,6 +787,63 @@ export default function ServiceOrderDetailPage() {
               <p className="text-5xl font-bold text-zinc-900 mt-2">
                 RD$ {Number(order.totalAmount).toLocaleString()}
               </p>
+            </div>
+
+            {/* Técnico */}
+            <div className="pt-6 border-t border-zinc-100">
+              <div className="flex justify-between items-center mb-3">
+                <p className="font-medium text-zinc-900">Técnico</p>
+                {canAssignTechnician && (
+                  <button
+                    onClick={handleToggleTechEditor}
+                    className="text-blue-600 text-sm font-medium hover:underline"
+                  >
+                    {isEditingTech
+                      ? "Cancelar"
+                      : order.technician
+                        ? "Cambiar"
+                        : "Asignar"}
+                  </button>
+                )}
+              </div>
+
+              {isEditingTech ? (
+                <div className="flex gap-3">
+                  <select
+                    value={selectedTechnician}
+                    onChange={(e) => setSelectedTechnician(e.target.value)}
+                    className="text-gray-700 flex-1 border border-zinc-200 rounded-2xl px-4 py-3"
+                  >
+                    <option value="">Seleccionar técnico...</option>
+                    {technicians.map((u: any) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAssignTechnician}
+                    disabled={assigningTech}
+                    className="px-6 bg-zinc-900 text-white rounded-2xl font-medium disabled:opacity-50"
+                  >
+                    {assigningTech ? "..." : "OK"}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p
+                    className={`text-lg font-semibold ${order.technician ? "text-zinc-900" : "text-amber-600"
+                      }`}
+                  >
+                    {order.technician?.name || "Sin asignar"}
+                  </p>
+                  {!order.technician && canAssignTechnician && (
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Requerido para marcar la orden como Reparada.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Mano de Obra */}
@@ -538,31 +882,85 @@ export default function ServiceOrderDetailPage() {
               )}
             </div>
 
+                        {/* Seguimiento para el cliente */}
+            <div className="pt-6 border-t border-zinc-100">
+              <p className="font-medium text-zinc-900 mb-1">
+                Seguimiento del cliente
+              </p>
+              <p className="text-xs text-zinc-400 mb-4">
+                Enlace privado para que el cliente vea el estado sin iniciar
+                sesión.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleCopyTrackingLink}
+                  disabled={linkLoading}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-medium transition disabled:opacity-50"
+                >
+                  <Copy size={18} />
+                  Copiar link
+                </button>
+                <button
+                  onClick={handleWhatsAppTrackingLink}
+                  disabled={linkLoading}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-medium transition disabled:opacity-50"
+                >
+                                   <MessageCircle size={18} />
+                  WhatsApp
+                </button>
+              </div>
+
+              {order.status === "READY_FOR_PICKUP" && (
+                <button
+                  onClick={handleResendNotification}
+                  disabled={notifyLoading}
+                  className="w-full mt-3 flex items-center justify-center gap-2 py-3 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-2xl font-medium transition disabled:opacity-50"
+                >
+                  <Mail size={18} />
+                  {notifyLoading ? "Enviando..." : "Reenviar aviso por email"}
+                </button>
+              )}
+            </div>
+
             {/* Acciones */}
             <div className="pt-6 border-t border-zinc-100 space-y-4">
-              <button
-                onClick={() => setIsStatusModalOpen(true)}
-                className="text-gray-700 w-full py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-semibold transition"
-              >
-                Cambiar Estatus
-              </button>
+              {nextStatuses.length > 0 && (
+                <button
+                  onClick={openStatusModal}
+                  className="text-gray-700 w-full py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-2xl font-semibold transition"
+                >
+                  Cambiar Estatus
+                </button>
+              )}
 
-              {order.status !== "DELIVERED" && (
+              {order.status === "READY_FOR_PICKUP" && !order.sale && (
                 <button
                   onClick={handleComplete}
                   className="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-semibold transition shadow-lg shadow-green-100"
                 >
-                  Facturar y Entregar
+                  Facturar
                 </button>
               )}
 
-              <button
-                onClick={handleOpenItemModal}
-                className="w-full py-4 bg-gradient-to-br from-blue-600 to-violet-600 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 hover:brightness-105 transition"
-              >
-                <Plus size={20} />
-                Agregar Repuesto
-              </button>
+              {order.status === "READY_FOR_PICKUP" && order.sale && (
+                <button
+                  onClick={handleDeliver}
+                  disabled={deliverLoading}
+                  className="w-full py-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-semibold transition disabled:opacity-50"
+                >
+                  {deliverLoading ? "Registrando..." : "Entregar Equipo"}
+                </button>
+              )}
+
+              {canEditParts && (
+                <button
+                  onClick={handleOpenItemModal}
+                  className="w-full py-4 bg-gradient-to-br from-blue-600 to-violet-600 text-white rounded-2xl font-semibold flex items-center justify-center gap-2 hover:brightness-105 transition"
+                >
+                  <Plus size={20} />
+                  Agregar Repuesto
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -576,6 +974,7 @@ export default function ServiceOrderDetailPage() {
               Agregar Repuesto
             </h3>
             <select
+              value={selectedProduct}
               className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
               onChange={(e) => setSelectedProduct(e.target.value)}
             >
@@ -627,11 +1026,19 @@ export default function ServiceOrderDetailPage() {
               onChange={(e) => setNewStatus(e.target.value)}
               className="text-gray-700 w-full border border-zinc-200 rounded-2xl px-4 py-4 mb-4"
             >
-              <option value="RECEIVED">Recibido</option>
-              <option value="DIAGNOSING">Diagnosticando</option>
-              <option value="REPAIRED">Reparado</option>
-              <option value="READY_FOR_PICKUP">Listo para retirar</option>
+              {nextStatuses.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABELS[s]}
+                </option>
+              ))}
             </select>
+                        {newStatus === "READY_FOR_PICKUP" && (
+              <p className="text-sm text-zinc-500 mb-4">
+                {order.customer?.email
+                  ? `Se enviará un email a ${order.customer.email} con el link de seguimiento.`
+                  : "El cliente no tiene email registrado: no se enviará ninguna notificación."}
+              </p>
+            )}
             <textarea
               placeholder="Nota del cambio (obligatoria)"
               value={changeNote}
@@ -641,7 +1048,7 @@ export default function ServiceOrderDetailPage() {
             <div className="flex gap-4">
               <button
                 onClick={() => setIsStatusModalOpen(false)}
-                className="flex-1 py-4 bg-red-500 rounded-2xl border border-zinc-200 font-medium"
+                className="flex-1 py-4 bg-red-500 text-white rounded-2xl border border-zinc-200 font-medium"
               >
                 Cancelar
               </button>

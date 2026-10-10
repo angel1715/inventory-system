@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ClipboardPlus,
   User,
+  UserPlus,
   Smartphone,
   Wrench,
 } from "lucide-react";
@@ -14,10 +15,13 @@ import {
 import toast from "react-hot-toast";
 
 import { createServiceOrder, getCustomers, getUsers } from "@/lib/api";
+import CustomerFormModal from "@/components/customers/CustomerFormModal";
 
 interface Customer {
   id: string;
   name: string;
+  email?: string | null;
+  phone?: string | null;
 }
 
 interface Technician {
@@ -46,6 +50,7 @@ export default function CreateServiceOrderPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(false);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
 
@@ -100,6 +105,20 @@ export default function CreateServiceOrderPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+    // Recarga la lista y deja seleccionado al cliente recién creado
+  const handleCustomerSaved = async (created?: any) => {
+    try {
+      const data = await getCustomers();
+      setCustomers(Array.isArray(data) ? data : []);
+    } catch {
+      toast.error("No fue posible actualizar la lista de clientes.");
+    }
+
+    if (created?.id) {
+      setForm((prev) => ({ ...prev, customerId: created.id }));
+    }
+  };
+
   const toggleAccessory = (accessory: string) => {
     setForm((prev) => ({
       ...prev,
@@ -108,6 +127,8 @@ export default function CreateServiceOrderPage() {
         : [...prev.accessories, accessory],
     }));
   };
+
+    const selectedCustomer = customers.find((c) => c.id === form.customerId);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -180,9 +201,19 @@ export default function CreateServiceOrderPage() {
             </div>
             <div className="p-6 grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-2">
-                  Cliente <span className="text-red-500">*</span>
-                </label>
+                                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-zinc-700">
+                    Cliente <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomerModalOpen(true)}
+                    className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    <UserPlus size={16} />
+                    Nuevo cliente
+                  </button>
+                </div>
                 <select
                   name="customerId"
                   value={form.customerId}
@@ -191,12 +222,18 @@ export default function CreateServiceOrderPage() {
                   required
                 >
                   <option value="">Seleccione un cliente</option>
-                  {customers.map((customer) => (
+                                    {customers.map((customer) => (
                     <option key={customer.id} value={customer.id}>
                       {customer.name}
                     </option>
                   ))}
                 </select>
+                {selectedCustomer && !selectedCustomer.email && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    Este cliente no tiene email registrado: no recibirá avisos
+                    por correo.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -435,7 +472,13 @@ export default function CreateServiceOrderPage() {
               {loading ? "Creando Orden..." : "Crear Orden"}
             </button>
           </div>
-        </form>
+               </form>
+
+        <CustomerFormModal
+          open={isCustomerModalOpen}
+          onClose={() => setIsCustomerModalOpen(false)}
+          onSaved={handleCustomerSaved}
+        />
       </div>
     </div>
   );

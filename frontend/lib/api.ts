@@ -448,8 +448,9 @@ export const updateServiceOrder = (orderId: string, data: {
   problem?: string;
   diagnostic?: string;
   repairSolution?: string;
-  estimatedRepairTime?: string;
+    estimatedRepairTime?: string;
   customerApproved?: boolean;
+  warrantyDays?: number;
 }) =>
   request(`/service-orders/${orderId}`, {
     method: "PATCH",
@@ -484,6 +485,61 @@ export const invoiceServiceOrder = (
 export const deliverServiceOrder = (id: string) =>
   request(`/service-orders/${id}/delivered`, {
     method: "PATCH",
+  });
+
+  // ==========================================
+// ASIGNAR TÉCNICO
+// ==========================================
+
+export const assignServiceTechnician = (orderId: string, technicianId: string) =>
+  request(`/service-orders/${orderId}/assign`, {
+    method: "PATCH",
+    body: JSON.stringify({ technicianId }),
+  });
+
+
+  // ==========================================
+// SEGUIMIENTO PÚBLICO (sin login)
+// ==========================================
+
+export const getTrackingLink = (orderId: string) =>
+  request(`/service-orders/${orderId}/tracking-link`);
+
+
+export const resendReadyNotification = (orderId: string) =>
+  request(`/service-orders/${orderId}/notify-ready`, {
+    method: "POST",
+  });
+
+// Fetch directo, sin token: lo usa la página pública que abre el cliente.
+export async function getPublicTracking(token: string) {
+  const res = await fetch(`${API}/public/tracking/${encodeURIComponent(token)}`, {
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(res.status === 404 ? "NOT_FOUND" : "REQUEST_FAILED");
+  }
+
+  return res.json();
+}
+
+// ==========================================
+// FOTOS DE LA ORDEN
+// ==========================================
+
+export const addServicePhoto = (
+  orderId: string,
+  data: { imageUrl: string; type: string; description?: string }
+) =>
+  request(`/service-orders/${orderId}/photos`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const removeServicePhoto = (orderId: string, photoId: string) =>
+  request(`/service-orders/${orderId}/photos/${photoId}`, {
+    method: "DELETE",
   });
 
 // ==========================================
