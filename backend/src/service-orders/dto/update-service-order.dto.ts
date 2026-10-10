@@ -1,8 +1,11 @@
 import {
     IsBoolean,
+    IsInt,
     IsOptional,
     IsString,
     Length,
+    Max,
+    Min,
 } from "class-validator";
 
 export class UpdateServiceOrderDto {
@@ -37,6 +40,12 @@ export class UpdateServiceOrderDto {
     @IsOptional()
     @IsString()
     estimatedRepairTime?: string;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    @Max(365)
+    warrantyDays?: number;
 
     @IsOptional()
     @IsBoolean()

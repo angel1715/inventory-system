@@ -19,6 +19,7 @@ import { UpdateLaborCostDto } from "./dto/update-labor-cost.dto";
 import { UpdateServiceOrderDto } from "./dto/update-service-order.dto";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
 import { InvoiceServiceOrderDto } from "./dto/invoice-service-order.dto";
+import { CreateServicePhotoDto } from "./dto/create-service-photo.dto";
 
 @Controller("service-orders")
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
@@ -47,16 +48,35 @@ export class ServiceOrdersController {
     return this.serviceOrdersService.findOne(id, req.user.businessId);
   }
 
+    @Get(":id/tracking-link")
+  getTrackingLink(@Param("id") id: string, @Req() req: any) {
+    return this.serviceOrdersService.getOrCreateTrackingToken(
+      id,
+      req.user.businessId,
+    );
+  }
+
+  
+  @Post(":id/notify-ready")
+  notifyReady(@Param("id") id: string, @Req() req: any) {
+    return this.serviceOrdersService.resendReadyNotification(
+      id,
+      req.user.businessId,
+      req.user.id,
+    );
+  }
+
   @Patch(":id/assign")
   assignTechnician(
     @Param("id") id: string,
     @Body() dto: AssignTechnicianDto,
     @Req() req: any
   ) {
-    return this.serviceOrdersService.assignTechnician(
+        return this.serviceOrdersService.assignTechnician(
       id,
       dto,
-      req.user.businessId
+      req.user.businessId,
+      req.user.id
     );
   }
 
@@ -131,6 +151,33 @@ export class ServiceOrdersController {
       req.user.id
     );
   }
+
+  @Post(":id/photos")
+addPhoto(
+    @Param("id") id: string,
+    @Body() dto: CreateServicePhotoDto,
+    @Req() req: any
+) {
+    return this.serviceOrdersService.addPhoto(
+        id,
+        dto,
+        req.user.businessId,
+        req.user.id
+    );
+}
+
+@Delete(":id/photos/:photoId")
+removePhoto(
+    @Param("id") id: string,
+    @Param("photoId") photoId: string,
+    @Req() req: any
+) {
+    return this.serviceOrdersService.removePhoto(
+        id,
+        photoId,
+        req.user.businessId
+    );
+}
 
 
   @Post(":id/invoice")
