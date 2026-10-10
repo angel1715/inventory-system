@@ -190,4 +190,103 @@ export class EmailService implements OnModuleInit {
             this.logger.error(error?.response?.text || error.message);
         }
     }
+
+        // =========================
+    // REPARACIÓN LISTA PARA RETIRAR
+    // =========================
+    async sendRepairReadyEmail(params: {
+        to: string;
+        customerName: string;
+        businessName: string;
+        businessPhone?: string | null;
+        businessAddress?: string | null;
+        replyToEmail?: string | null;
+        ticketNumber: string;
+        device: string;
+        trackingUrl: string;
+    }): Promise<boolean> {
+        const {
+            to,
+            customerName,
+            businessName,
+            businessPhone,
+            businessAddress,
+            replyToEmail,
+            ticketNumber,
+            device,
+            trackingUrl,
+        } = params;
+
+        const e = (value: string) => this.escapeHtml(value);
+
+        try {
+            const response = await this.client.sendTransacEmail({
+                // El remitente técnico es el verificado en Brevo; el nombre visible es el del taller.
+                sender: { email: this.SENDER_EMAIL, name: businessName },
+                // Si el cliente responde el correo, le llega al taller y no a la plataforma.
+                ...(replyToEmail
+                    ? { replyTo: { email: replyToEmail, name: businessName } }
+                    : {}),
+                to: [{ email: to, name: customerName }],
+                subject: `✅ Tu equipo está listo para retirar - ${businessName}`,
+                htmlContent: `
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;color:#18181b;">
+                        <h2 style="margin:0 0 4px;">${e(businessName)}</h2>
+                        <p style="color:#71717a;margin:0 0 24px;font-size:13px;">
+                            Orden de servicio #${e(ticketNumber)}
+                        </p>
+
+                        <h1 style="font-size:22px;margin:0 0 12px;">¡Tu equipo está listo!</h1>
+
+                        <p>
+                            Hola ${e(customerName)}, tu <strong>${e(device)}</strong>
+                            ya está reparado y listo para retirar.
+                        </p>
+
+                        <p style="margin:28px 0;">
+                            <a href="${trackingUrl}"
+                                style="display:inline-block;padding:14px 24px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">
+                                Ver estado de mi reparación
+                            </a>
+                        </p>
+
+                        ${
+                            businessAddress
+                                ? `<p style="margin:0 0 4px;"><strong>Dónde retirarlo:</strong> ${e(businessAddress)}</p>`
+                                : ""
+                        }
+                        ${
+                            businessPhone
+                                ? `<p style="margin:0;"><strong>Teléfono:</strong> ${e(businessPhone)}</p>`
+                                : ""
+                        }
+
+                        <hr style="margin:28px 0;border:none;border-top:1px solid #e4e4e7;" />
+                        <small style="color:#a1a1aa;">
+                            Este es un mensaje automático de ${e(businessName)}.
+                        </small>
+                    </div>
+                `,
+            });
+
+            this.logger.log(`Email de reparación lista enviado (orden ${ticketNumber})`);
+            this.logger.log(JSON.stringify(response));
+            return true;
+        } catch (error: any) {
+            this.logger.error(`Error enviando email de reparación lista (orden ${ticketNumber})`);
+            this.logger.error(error?.response?.text || error.message);
+            return false;
+        }
+    }
+
+    // Los datos del cliente y del equipo los escribe el personal: se escapan
+    // antes de meterlos en el HTML del correo.
+    private escapeHtml(value: string) {
+        return value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
 }
