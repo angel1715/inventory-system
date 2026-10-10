@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
 }
 
 model Business {
@@ -338,6 +338,7 @@ model Sale {
   discount           Decimal
   total              Decimal
   paymentMethod      PaymentMethod
+  origin             SaleOrigin          @default(POS)
   cashSessionId      String?
   createdAt          DateTime            @default(now())
   createdById        String?
@@ -365,6 +366,7 @@ model Sale {
   items              SaleItem[]
 
   @@unique([businessId, idempotencyKey])
+  @@unique([businessId, invoiceNumber])
   @@index([businessId])
   @@index([createdAt])
 }
@@ -422,6 +424,7 @@ model ServiceOrder {
   customerApproved    Boolean        @default(false)
   estimatedRepairTime String?
   repairSolution      String?
+  trackingToken       String?        @unique
   sale                Sale?
   items               ServiceItem[]
   logs                ServiceLog[]
@@ -669,6 +672,8 @@ enum ServiceStatus {
   REPAIRED
   READY_FOR_PICKUP
   DELIVERED
+  CANCELLED
+  NOT_REPAIRABLE
 }
 
 enum ReceivableStatus {
