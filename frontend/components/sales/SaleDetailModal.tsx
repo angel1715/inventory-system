@@ -190,7 +190,26 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
                   </p>
                 </div>
               </div>
-            ))}
+                       ))}
+
+            {Number(currentSale.serviceOrder?.laborCost) > 0 && (
+              <div className="border rounded-2xl p-4 flex justify-between">
+                <div>
+                  <h3 className="text-gray-600 font-bold">Mano de obra</h3>
+                  <p className="text-sm text-gray-500">
+                    Orden #{currentSale.serviceOrder.ticketNumber} ·{" "}
+                    {currentSale.serviceOrder.deviceBrand}{" "}
+                    {currentSale.serviceOrder.deviceModel}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-gray-600 font-bold">
+                    RD${Number(currentSale.serviceOrder.laborCost).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* TOTALS */}

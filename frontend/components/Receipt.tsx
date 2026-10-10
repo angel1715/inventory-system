@@ -180,11 +180,28 @@ export default function Receipt({ sale }: any) {
                   {sale.serviceOrder.deviceModel}
                 </span>
               </div>
-              {sale.serviceOrder.serialOrImei && (
+                            {sale.serviceOrder.serialOrImei && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">IMEI/Serial:</span>
                   <span className="font-mono">
                     {sale.serviceOrder.serialOrImei}
+                  </span>
+                </div>
+              )}
+              {Number(sale.serviceOrder.warrantyDays) > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Garantía:</span>
+                  <span className="font-medium">
+                    {sale.serviceOrder.warrantyUntil
+                      ? `hasta ${new Date(
+                          sale.serviceOrder.warrantyUntil,
+                        ).toLocaleDateString("es-DO", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          timeZone: "America/Santo_Domingo",
+                        })}`
+                      : `${sale.serviceOrder.warrantyDays} días desde la entrega`}
                   </span>
                 </div>
               )}
