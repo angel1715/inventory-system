@@ -12,17 +12,14 @@ import {
 } from "lucide-react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleGuard from "@/components/RoleGuard";
-import {
-  getCustomers,
-  createCustomer,
-  updateCustomer,
-  toggleCustomer,
-} from "@/lib/api";
+import { getCustomers, toggleCustomer } from "@/lib/api";
+import CustomerFormModal from "@/components/customers/CustomerFormModal";
 
 type Customer = {
   id: string;
   name: string;
-  phone?: string;
+    phone?: string;
+  email?: string;
   taxId?: string;
   maxCredit: number;
   currentDebt: number;
@@ -30,27 +27,13 @@ type Customer = {
   createdAt: string;
 };
 
-type FormDataType = {
-  name: string;
-  phone: string;
-  taxId: string;
-  maxCredit: string;
-};
 
-const initialForm: FormDataType = {
-  name: "",
-  phone: "",
-  taxId: "",
-  maxCredit: "10000",
-};
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [form, setForm] = useState<FormDataType>(initialForm);
 
   // =========================
   // LOAD CUSTOMERS
@@ -72,12 +55,11 @@ export default function CustomersPage() {
     loadCustomers();
   }, []);
 
-  // =========================
+   // =========================
   // OPEN CREATE MODAL
   // =========================
   function handleOpenCreate() {
     setEditingCustomer(null);
-    setForm(initialForm);
     setOpen(true);
   }
 
@@ -86,54 +68,7 @@ export default function CustomersPage() {
   // =========================
   function handleOpenEdit(customer: Customer) {
     setEditingCustomer(customer);
-    setForm({
-      name: customer.name,
-      phone: customer.phone || "",
-      taxId: customer.taxId || "",
-      maxCredit: customer.maxCredit.toString(),
-    });
     setOpen(true);
-  }
-
-  // =========================
-  // SAVE CUSTOMER (CREATE / UPDATE)
-  // =========================
-  async function handleSave() {
-    if (saving) return;
-
-    if (!form.name.trim()) {
-      toast.error("El nombre es requerido");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const payload = {
-        name: form.name.trim(),
-        phone: form.phone.trim() || undefined,
-        taxId: form.taxId.trim() || undefined,
-        maxCredit: Number(form.maxCredit) || 0,
-      };
-
-      if (editingCustomer) {
-        await updateCustomer(editingCustomer.id, payload);
-        toast.success("Cliente actualizado exitosamente");
-      } else {
-        await createCustomer(payload);
-        toast.success("Cliente creado exitosamente");
-      }
-
-      setOpen(false);
-      setForm(initialForm);
-      setEditingCustomer(null);
-      await loadCustomers();
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || "Error al guardar el cliente");
-    } finally {
-      setSaving(false);
-    }
   }
 
   // =========================
@@ -207,6 +142,9 @@ export default function CustomersPage() {
                         Teléfono
                       </th>
                       <th className="p-4 text-sm font-bold text-gray-500">
+                        Correo
+                      </th>
+                      <th className="p-4 text-sm font-bold text-gray-500">
                         RNC / Cédula
                       </th>
                       <th className="p-4 text-sm font-bold text-gray-500">
@@ -232,6 +170,9 @@ export default function CustomersPage() {
                         </td>
                         <td className="p-4 text-gray-600">
                           {customer.phone || "—"}
+                        </td>
+                                                <td className="p-4 text-gray-600">
+                          {customer.email || "—"}
                         </td>
                         <td className="p-4 text-gray-600">
                           <span className="font-mono bg-gray-100/80 px-2 py-0.5 rounded text-xs text-gray-700">
@@ -302,109 +243,15 @@ export default function CustomersPage() {
             )}
           </div>
 
-          {/* MODAL (CREAR / EDITAR) */}
-          {open && (
-            <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 overflow-y-auto p-6 backdrop-blur-sm">
-              <div className="bg-white w-full max-w-xl rounded-3xl p-8 shadow-2xl mt-10 border border-gray-100 animate-in zoom-in-95 duration-150">
-                <h2 className="text-3xl font-bold mb-6 text-gray-900">
-                  {editingCustomer ? "Editar Cliente" : "Registrar Cliente"}
-                </h2>
-
-                <div className="space-y-5">
-                  {/* NOMBRE */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-600">
-                      Nombre Completo *
-                    </label>
-                    <input
-                      type="text"
-                      value={form.name}
-                      onChange={(e) =>
-                        setForm({ ...form, name: e.target.value })
-                      }
-                      placeholder="Ej: Juan Pérez"
-                      className="w-full border border-gray-200 rounded-2xl p-4 mt-2 text-gray-700 outline-none focus:ring-2 focus:ring-black transition"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* TELÉFONO */}
-                    <div>
-                      <label className="text-sm font-semibold text-gray-600">
-                        Teléfono / Celular
-                      </label>
-                      <input
-                        type="text"
-                        value={form.phone}
-                        onChange={(e) =>
-                          setForm({ ...form, phone: e.target.value })
-                        }
-                        placeholder="Ej: 809-555-0199"
-                        className="w-full border border-gray-200 rounded-2xl p-4 mt-2 text-gray-700 outline-none focus:ring-2 focus:ring-black transition"
-                      />
-                    </div>
-
-                    {/* RNC o CÉDULA */}
-                    <div>
-                      <label className="text-sm font-semibold text-gray-600">
-                        RNC o Cédula (Tax ID)
-                      </label>
-                      <input
-                        type="text"
-                        value={form.taxId}
-                        onChange={(e) =>
-                          setForm({ ...form, taxId: e.target.value })
-                        }
-                        placeholder="Ej: 101-00123-4"
-                        className="w-full border border-gray-200 rounded-2xl p-4 mt-2 text-gray-700 outline-none focus:ring-2 focus:ring-black transition"
-                      />
-                    </div>
-                  </div>
-
-                  {/* LÍMITE DE CRÉDITO */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-600">
-                      Límite de Crédito Autorizado (RD$)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="500"
-                      value={form.maxCredit}
-                      onChange={(e) =>
-                        setForm({ ...form, maxCredit: e.target.value })
-                      }
-                      placeholder="10000"
-                      className="w-full border border-gray-200 rounded-2xl p-4 mt-2 text-gray-700 font-semibold text-lg outline-none focus:ring-2 focus:ring-black transition"
-                    />
-                  </div>
-                </div>
-
-                {/* ACCIONES DEL MODAL */}
-                <div className="flex gap-3 mt-8">
-                  <button
-                    onClick={() => setOpen(false)}
-                    disabled={saving}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 transition p-4 rounded-2xl font-semibold text-gray-700 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex-1 bg-black hover:opacity-90 transition p-4 rounded-2xl font-bold text-white shadow-lg disabled:opacity-50"
-                  >
-                    {saving
-                      ? "Guardando..."
-                      : editingCustomer
-                        ? "Actualizar Cambios"
-                        : "Guardar Cliente"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+                   <CustomerFormModal
+            open={open}
+            customer={editingCustomer}
+            onClose={() => {
+              setOpen(false);
+              setEditingCustomer(null);
+            }}
+            onSaved={loadCustomers}
+          />
         </div>
       </RoleGuard>
     </ProtectedRoute>
