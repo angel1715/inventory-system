@@ -10,6 +10,14 @@ export class CustomersService {
         return Math.round(Number(num) * 100) / 100;
     }
 
+    
+    // undefined = no tocar el campo; vacío o null = borrar el correo
+    private normalizeEmail(email?: string | null): string | null | undefined {
+        if (email === undefined) return undefined;
+        const clean = email?.trim().toLowerCase();
+        return clean ? clean : null;
+    }
+
     // ==========================================
     // CREATE CUSTOMER + CREDIT ACCOUNT
     // ==========================================
@@ -26,8 +34,8 @@ export class CustomersService {
                 data: {
                     name: dto.name,
                     phone: dto.phone,
-                    taxId: dto.taxId,
-                    email: dto.email,
+                                        taxId: dto.taxId,
+                    email: this.normalizeEmail(dto.email),
                     address: dto.address,
                     businessId,
                 },
@@ -60,7 +68,9 @@ export class CustomersService {
         return customers.map((customer) => ({
             id: customer.id,
             name: customer.name,
-            phone: customer.phone,
+                        phone: customer.phone,
+            email: customer.email,
+            address: customer.address,
             taxId: customer.taxId,
             active: customer.active,
             createdAt: customer.createdAt,
@@ -94,19 +104,26 @@ export class CustomersService {
                 data: {
                     name: dto.name,
                     phone: dto.phone,
-                    taxId: dto.taxId,
-                    email: dto.email,
+                                       taxId: dto.taxId,
+                    email: this.normalizeEmail(dto.email),
                     address: dto.address,
                 },
             });
 
             // 2. Actualizar límite en la cuenta de crédito vinculada
-            await tx.creditAccount.update({
-                where: { customerId: id },
-                data: {
-                    maxCredit: dto.maxCredit ?? 0,
-                },
-            });
+                       // 2. Actualizar el límite solo si viene en la petición
+            if (dto.maxCredit !== undefined) {
+                await tx.creditAccount.upsert({
+                    where: { customerId: id },
+                    update: { maxCredit: dto.maxCredit },
+                    create: {
+                        customerId: id,
+                        businessId,
+                        maxCredit: dto.maxCredit,
+                        currentDebt: 0,
+                    },
+                });
+            }
 
             return updatedCustomer;
         });
@@ -142,8 +159,7 @@ export class CustomersService {
             const activeSession = await tx.cashSession.findFirst({ where: { businessId, status: "OPEN" } });
             if (!activeSession) throw new BadRequestException("Debe abrir la caja para registrar pagos.");
 
-            const account = await tx.creditAccount.findUnique({ where: { customerId } });
-            if (!account) throw new NotFoundException("Cuenta de crédito no encontrada.");
+            const account = await tx.creditAccount.findFirst({ where: { customerId, businessId } });            if (!account) throw new NotFoundException("Cuenta de crédito no encontrada.");
 
             // Validar que el monto sea lógico
             if (dto.amount <= 0) throw new BadRequestException("El monto debe ser mayor a cero.");
