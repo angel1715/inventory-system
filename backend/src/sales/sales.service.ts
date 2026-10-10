@@ -326,6 +326,7 @@ export class SalesService {
                     businessId,
                     customerId: dto.customerId ?? null,
                     serviceOrderId: dto.serviceOrderId ?? null,
+                    
                     items: {
                         create: dto.items.map((i) => ({
                             productId: i.productId,
@@ -552,8 +553,15 @@ export class SalesService {
                     where,
                     skip,
                     take: limit,
-                    include: {
+                                        include: {
                         createdBy: { select: userSelect },
+                        customer: true,
+                        serviceOrder: {
+                            omit: { password: true },
+                            include: {
+                                technician: { select: { id: true, name: true } },
+                            },
+                        },
                         items: {
                             include: {
                                 product: { select: { id: true, name: true, barcode: true } }
