@@ -1,4 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
+import { lookup } from "dns/promises";
+import { isIP } from "net";
 
 // El conector firma el XML con el certificado P12 y lo somete a la DGII de forma
 // síncrona antes de responder — esa cadena completa puede tardar más de 15s bajo
@@ -20,6 +22,55 @@ export class EcfConnectorException extends HttpException {
         // 401 (key inválida/inactiva) se traduce tal cual; cualquier otra falla del
         // conector (400/500/red) se reporta como 502 Bad Gateway (falla upstream).
         super(message, upstreamStatus === 401 ? HttpStatus.UNAUTHORIZED : HttpStatus.BAD_GATEWAY);
+    }
+}
+
+function isPrivateAddress(ip: string): boolean {
+    if (ip.includes(":")) {
+        const v6 = ip.toLowerCase();
+        if (v6.startsWith("::ffff:")) return isPrivateAddress(v6.slice(7));
+        return v6 === "::1" || v6 === "::" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+    }
+
+    const [a, b] = ip.split(".").map(Number);
+    return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168)
+    );
+}
+
+// Cada negocio configura su propia URL: se valida antes de hacer la petición.
+async function assertSafeBaseUrl(baseUrl: string) {
+    // Solo para desarrollo local (por ejemplo un conector en http://localhost)
+    if (process.env.ECF_ALLOW_PRIVATE_HOSTS === "true") return;
+
+    let url: URL;
+    try {
+        url = new URL(baseUrl);
+    } catch {
+        throw new EcfConnectorException("La URL del conector e-CF no es válida.", 0);
+    }
+
+    if (url.protocol !== "https:") {
+        throw new EcfConnectorException("La URL del conector e-CF debe usar https.", 0);
+    }
+
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+
+    let addresses: { address: string }[];
+    try {
+        addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+    } catch {
+        throw new EcfConnectorException("No se pudo resolver el dominio del conector e-CF.", 0);
+    }
+
+    if (addresses.some((a) => isPrivateAddress(a.address))) {
+        throw new EcfConnectorException("La URL del conector e-CF apunta a una dirección no permitida.", 0);
     }
 }
 
@@ -80,9 +131,10 @@ export interface EcfSendResponse {
 @Injectable()
 export class EcfConnectorService {
     private async call<T>(baseUrl: string, apiKey: string, path: string, options: RequestInit = {}): Promise<T> {
+                await assertSafeBaseUrl(baseUrl);
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
         let res: Response;
         try {
             res = await fetch(`${baseUrl.replace(/\/$/, "")}/api/ecf${path}`, {
@@ -92,7 +144,8 @@ export class EcfConnectorService {
                     "Content-Type": "application/json",
                     ...options.headers,
                 },
-                signal: controller.signal,
+                                signal: controller.signal,
+                redirect: "error",
             });
         } catch (err: any) {
             throw new EcfConnectorException(

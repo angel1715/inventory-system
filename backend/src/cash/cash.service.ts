@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from "@nestjs/common";
+import { Injectable, BadRequestException, ForbiddenException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { PaymentMethod } from "@prisma/client";
 
@@ -113,9 +113,10 @@ export class CashService {
     // ==========================================
     // CLOSE REGISTER - BLINDADO Y AUDITADO
     // ==========================================
-    async closeRegister(
+        async closeRegister(
         businessId: string,
         userId: string,
+        role: string,
         actualCash: number,
         note?: string // Nueva justificación obligatoria si hay diferencia
     ) {
@@ -129,6 +130,17 @@ export class CashService {
 
                 if (!summary) {
                     throw new BadRequestException("No se encontró ninguna sesión de caja abierta.");
+                }
+
+                               // El empleado solo cierra la caja que él abrió; dueño y admin cierran cualquiera
+                if (role !== "OWNER" && role !== "ADMIN") {
+                    const open = await tx.cashSession.findUnique({
+                        where: { id: summary.sessionId },
+                        select: { userId: true },
+                    });
+                    if (open?.userId !== userId) {
+                        throw new ForbiddenException("Solo quien abrió la caja o el dueño puede cerrarla.");
+                    }
                 }
 
                 const difference = actualCash - summary.expectedCash;

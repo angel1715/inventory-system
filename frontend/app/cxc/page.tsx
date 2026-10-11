@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleGuard from "@/components/RoleGuard";
+import { useAuth } from "@/app/context/AuthContext";
 import { getCustomers, recordPayment } from "@/lib/api";
 
 type Customer = {
@@ -27,6 +28,7 @@ type Customer = {
 
 export default function CxCPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [debtors, setDebtors] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -108,7 +110,7 @@ export default function CxCPage() {
   return (
     <ProtectedRoute>
       {/* Restricción de acceso a nivel de página */}
-      <RoleGuard roles={["OWNER", "ADMIN"]}>
+           <RoleGuard roles={["OWNER", "ADMIN", "EMPLOYEE"]}>
         <div className="min-h-screen bg-gray-50 p-8 animate-in fade-in duration-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
@@ -120,11 +122,11 @@ export default function CxCPage() {
                 registra los cobros.
               </p>
             </div>
-            <Link
-              href="/dashboard"
+                        <Link
+             href="/dashboard"
               className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-700 transition px-5 py-3 rounded-2xl font-medium shadow-sm"
             >
-              <ArrowLeft size={16} /> Dashboard
+              <ArrowLeft size={16} /> {user?.role === "EMPLOYEE" ? "Inicio" : "Dashboard"}
             </Link>
           </div>
 
@@ -218,7 +220,7 @@ export default function CxCPage() {
                         </td>
                         <td className="p-4 text-right">
                           {/* Restricción extra para ocultar el botón de acción */}
-                          <RoleGuard roles={["OWNER", "ADMIN"]}>
+                                                    <RoleGuard roles={["OWNER", "ADMIN", "EMPLOYEE"]}>
                             <button
                               onClick={() => handleOpenCobro(customer)}
                               className="inline-flex items-center gap-1.5 bg-black text-white hover:bg-gray-900 px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm active:scale-[0.97]"

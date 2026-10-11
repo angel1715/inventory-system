@@ -12,7 +12,7 @@ import {
   invoiceServiceOrder,
   deliverServiceOrder,
   removeServiceItem,
-  getUsers,
+  getTechnicians,
     assignServiceTechnician,
   getTrackingLink,
   resendReadyNotification,
@@ -243,7 +243,7 @@ export default function ServiceOrderDetailPage() {
 
     try {
       if (technicians.length === 0) {
-        const data = await getUsers();
+        const data = await getTechnicians();
         const list = Array.isArray(data) ? data : (data?.data ?? []);
         setTechnicians(list.filter((u: any) => u.active !== false));
       }

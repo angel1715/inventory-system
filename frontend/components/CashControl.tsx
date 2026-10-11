@@ -76,11 +76,17 @@ export default function CashControl({ session, refresh }: any) {
           </p>
 
           {!summary ? (
-            <button
+                        <button
+              disabled={loading}
               onClick={async () => {
-                setLoading(true);
-                setSummary(await getCashSummary());
-                setLoading(false);
+                try {
+                  setLoading(true);
+                  setSummary(await getCashSummary());
+                } catch (err: any) {
+                  toast.error(err?.message || "No se pudo cargar el arqueo");
+                } finally {
+                  setLoading(false);
+                }
               }}
               className="w-full bg-gray-900 text-white p-3 rounded-xl hover:bg-black transition"
             >
@@ -141,14 +147,27 @@ export default function CashControl({ session, refresh }: any) {
             onChange={(e) => setOpeningAmount(e.target.value)}
             className="text-gray-700 w-full p-3 border rounded-xl"
           />
-          <button
+                    <button
+            disabled={loading}
             onClick={async () => {
-              await openCash(Number(openingAmount));
-              refresh();
+              if (openingAmount === "" || Number(openingAmount) < 0) {
+                toast.error("Indica el monto inicial de la caja.");
+                return;
+              }
+              try {
+                setLoading(true);
+                await openCash(Number(openingAmount));
+                setOpeningAmount("");
+                refresh();
+              } catch (err: any) {
+                toast.error(err?.message || "No se pudo abrir la caja");
+              } finally {
+                setLoading(false);
+              }
             }}
-            className="w-full bg-black text-white p-3 rounded-xl"
+            className="w-full bg-black text-white p-3 rounded-xl disabled:opacity-50"
           >
-            Abrir Caja
+            {loading ? "Procesando..." : "Abrir Caja"}
           </button>
         </div>
       )}

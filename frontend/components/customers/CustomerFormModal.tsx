@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { createCustomer, updateCustomer } from "@/lib/api";
+import { useAuth } from "@/app/context/AuthContext";
 
 type EditableCustomer = {
   id: string;
@@ -44,6 +45,8 @@ export default function CustomerFormModal({
 }: CustomerFormModalProps) {
   const [form, setForm] = useState<FormDataType>(initialForm);
   const [saving, setSaving] = useState(false);
+    const { user } = useAuth();
+  const canSetCredit = user?.role === "OWNER" || user?.role === "ADMIN";
 
   // Cada vez que se abre: carga los datos del cliente a editar o limpia el formulario
   useEffect(() => {
@@ -84,7 +87,7 @@ export default function CustomerFormModal({
         phone: form.phone.trim() || undefined,
                 email: email || (customer ? null : undefined),
         taxId: form.taxId.trim() || undefined,
-        maxCredit: Number(form.maxCredit) || 0,
+                ...(canSetCredit ? { maxCredit: Number(form.maxCredit) || 0 } : {}),
       };
 
       const saved = customer
@@ -178,7 +181,8 @@ export default function CustomerFormModal({
             </p>
           </div>
 
-          {/* LÍMITE DE CRÉDITO */}
+                    {/* LÍMITE DE CRÉDITO (solo dueño / admin) */}
+          {canSetCredit && (
           <div>
             <label className="text-sm font-semibold text-gray-600">
               Límite de Crédito Autorizado (RD$)
@@ -193,6 +197,7 @@ export default function CustomerFormModal({
               className="w-full border border-gray-200 rounded-2xl p-4 mt-2 text-gray-700 font-semibold text-lg outline-none focus:ring-2 focus:ring-black transition"
             />
           </div>
+          )}
         </div>
 
         {/* ACCIONES */}

@@ -32,10 +32,7 @@ export default function ImeiTrackerPage() {
       toast.success("Dispositivo localizado con éxito");
     } catch (err: any) {
       // Manejo de errores amigable si NestJS devuelve un 404
-      const errorMessage =
-        err.response?.data?.message ||
-        "El IMEI no está registrado en el sistema.";
-      toast.error(errorMessage);
+            toast.error(err?.message || "El IMEI no está registrado en el sistema.");
     } finally {
       setLoading(false);
     }
@@ -188,7 +185,8 @@ export default function ImeiTrackerPage() {
                         <h4 className="font-bold text-gray-900 text-base mt-0.5">
                           Entrada a Inventario (Compra)
                         </h4>
-                        <div className="mt-2 bg-gray-50 border rounded-xl p-3 text-sm grid grid-cols-2 gap-2 text-gray-600">
+                        {data.lifecycle.purchase.supplier !== undefined && (
+  <div className="mt-2 bg-gray-50 border rounded-xl p-3 text-sm grid grid-cols-2 gap-2 text-gray-600">
                           <p>
                             🧾 Factura:{" "}
                             <span className="font-medium text-gray-900">
@@ -210,6 +208,7 @@ export default function ImeiTrackerPage() {
                             </span>
                           </p>
                         </div>
+                        )}
                       </div>
                     </div>
                   ) : (

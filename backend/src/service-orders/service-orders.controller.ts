@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   UseGuards,
+  UseInterceptors
 } from "@nestjs/common";
 import { ServiceOrdersService } from "./service-orders.service";
 import { CreateServiceOrderDto } from "./dto/create-service-order.dto";
@@ -20,9 +21,11 @@ import { UpdateServiceOrderDto } from "./dto/update-service-order.dto";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
 import { InvoiceServiceOrderDto } from "./dto/invoice-service-order.dto";
 import { CreateServicePhotoDto } from "./dto/create-service-photo.dto";
+import { HideCostInterceptor } from "../common/hide-cost.interceptor";
 
 @Controller("service-orders")
 @UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseInterceptors(HideCostInterceptor)
 export class ServiceOrdersController {
   constructor(private readonly serviceOrdersService: ServiceOrdersService) { }
 

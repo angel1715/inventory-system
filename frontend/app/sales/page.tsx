@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import RoleGuard from "@/components/RoleGuard";
 import { getSales, getSalesExport } from "@/lib/api";
 import toast from "react-hot-toast";
 import SaleDetailModal from "@/components/sales/SaleDetailModal";
@@ -21,25 +22,34 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("ALL");
   const [dateFilter, setDateFilter] = useState("ALL");
+    const [pageSize, setPageSize] = useState(25); // 0 = todas
+  const [meta, setMeta] = useState<{ total: number; totalAmount: number }>({
+    total: 0,
+    totalAmount: 0,
+  });
 
   const loadSales = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await getSales(
+            const response = await getSales(
         page,
-        10,
+        pageSize,
         search,
         paymentFilter,
         dateFilter,
       );
       setSales(response.data || []);
       setTotalPages(response.meta?.totalPages || 1);
+      setMeta({
+        total: response.meta?.total ?? 0,
+        totalAmount: response.meta?.totalAmount ?? 0,
+      });
     } catch (err: any) {
       toast.error("Error al cargar ventas");
     } finally {
       setLoading(false);
     }
-  }, [page, search, paymentFilter, dateFilter]);
+    }, [page, pageSize, search, paymentFilter, dateFilter]);
 
   useEffect(() => {
     const timer = setTimeout(loadSales, 500);
@@ -123,7 +133,8 @@ export default function SalesPage() {
     toast.success("PDF generado con éxito");
 };
   return (
-    <ProtectedRoute>
+        <ProtectedRoute>
+      <RoleGuard roles={["OWNER"]}>
       <div className="min-h-screen bg-gray-100 p-6">
         <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <h1 className="text-gray-700 text-3xl font-bold">
@@ -185,9 +196,33 @@ export default function SalesPage() {
             <option value="ALL">Todo el tiempo</option>
             <option value="TODAY">Hoy</option>
             <option value="WEEK">Últimos 7 días</option>
-            <option value="MONTH">Último mes</option>
+                       <option value="MONTH">Último mes</option>
+          </select>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPage(1);
+              setPageSize(Number(e.target.value));
+            }}
+            className="text-gray-700 border rounded-2xl px-4 py-3"
+          >
+            <option value={10}>10 por página</option>
+            <option value={25}>25 por página</option>
+            <option value={50}>50 por página</option>
+            <option value={100}>100 por página</option>
+            <option value={0}>Todas las ventas</option>
           </select>
         </div>
+
+        <p className="text-sm text-gray-600 mb-3">
+          Mostrando {sales.length} de {meta.total} ventas · Total del filtro:{" "}
+          <span className="font-semibold text-gray-800">
+            RD$
+            {meta.totalAmount.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })}
+          </span>
+        </p>
 
         <div className="bg-white rounded-3xl border overflow-hidden">
           {loading ? (
@@ -223,7 +258,7 @@ export default function SalesPage() {
                       <td className="text-gray-700 p-4 text-right">
                         RD${Number(sale.total).toFixed(2)}
                       </td>
-                      <td className=" text-gray-700p-4 text-right">
+                      <td className="text-gray-700 p-4 text-right">
                         <button
                           onClick={() => {
                             setSelectedSale(sale);
@@ -247,25 +282,27 @@ export default function SalesPage() {
             </table>
           )}
 
-          <div className="p-4 flex justify-between items-center border-t">
-            <button
-              disabled={page === 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="bg-black px-4 py-2 border rounded-xl"
-            >
-              Anterior
-            </button>
-            <span className="text-gray-700">
-              Página {page} de {totalPages}
-            </span>
-            <button
-              disabled={page === totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="bg-black px-4 py-2 border rounded-xl"
-            >
-              Siguiente
-            </button>
-          </div>
+                    {pageSize !== 0 && (
+            <div className="p-4 flex justify-between items-center border-t">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="bg-black text-white px-4 py-2 rounded-xl disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span className="text-gray-700">
+                Página {page} de {totalPages}
+              </span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="bg-black text-white px-4 py-2 rounded-xl disabled:opacity-40"
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
         </div>
 
         <SaleDetailModal
@@ -274,6 +311,7 @@ export default function SalesPage() {
           onClose={() => setOpen(false)}
         />
       </div>
+          </RoleGuard>
     </ProtectedRoute>
   );
 }

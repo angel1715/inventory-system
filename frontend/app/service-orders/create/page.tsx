@@ -14,7 +14,7 @@ import {
 
 import toast from "react-hot-toast";
 
-import { createServiceOrder, getCustomers, getUsers } from "@/lib/api";
+import { createServiceOrder, getCustomers, getTechnicians } from "@/lib/api";
 import CustomerFormModal from "@/components/customers/CustomerFormModal";
 
 interface Customer {
@@ -80,10 +80,10 @@ export default function CreateServiceOrderPage() {
       try {
         const [customersData, usersData] = await Promise.all([
           getCustomers(),
-          getUsers(),
+                    getTechnicians(),
         ]);
         setCustomers(customersData);
-        setTechnicians(usersData.filter((u: Technician) => u.active));
+        setTechnicians(usersData); // el backend ya devuelve solo los activos
       } catch {
         toast.error("No fue posible cargar la información.");
       }

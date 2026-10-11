@@ -3,17 +3,19 @@ import { CustomersService } from "./customers.service";
 import { CreateCustomerDto, RecordPaymentDto } from "./dto/customer.dto";
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
-// Asumiendo que usas los nombres estándar de tus JwtGuards
+import { RolesGuard } from "../auth/roles.guard";
+import { Roles } from "../auth/roles.decorator";
 
 @Controller("customers")
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 export class CustomersController {
     constructor(private readonly customersService: CustomersService) { }
 
+    // El empleado puede registrar clientes (queda sin crédito, ver el service)
     @Post()
     async create(@Body() dto: CreateCustomerDto, @Req() req: any) {
-        const { businessId } = req.user;
-        return this.customersService.create(dto, businessId);
+        const { businessId, role } = req.user;
+        return this.customersService.create(dto, businessId, role);
     }
 
     @Get()
@@ -28,29 +30,29 @@ export class CustomersController {
         return this.customersService.getAccountStatus(customerId, businessId);
     }
 
-    // En tu customers.controller.ts
-
+    // El empleado cobra en caja: registrar abonos es para todos los roles
     @Post(':id/payment')
     async recordPayment(
         @Param('id') customerId: string,
         @Body() dto: RecordPaymentDto,
         @Req() req: any
     ) {
-
         const businessId = req.user.businessId;
         const userId = req.user.id;
 
         return this.customersService.recordPayment(customerId, dto, businessId, userId);
     }
 
+    // Editar clientes (incluye el límite de crédito) y habilitarlos: solo dueño
+    @Roles("OWNER")
     @Put(':id')
     update(@Param('id') id: string, @Body() dto: any, @Req() req) {
         return this.customersService.update(id, dto, req.user.businessId);
     }
 
+    @Roles("OWNER")
     @Patch(':id/toggle')
     toggleActive(@Param('id') id: string, @Req() req) {
         return this.customersService.toggleActive(id, req.user.businessId);
     }
 }
-

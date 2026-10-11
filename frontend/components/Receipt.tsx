@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { useSettings } from "@/hooks/useSettings";
+import { getDisplayItems } from "@/lib/saleDisplay";
 
 export default function Receipt({ sale }: any) {
   const { settings } = useSettings();
@@ -27,13 +28,7 @@ export default function Receipt({ sale }: any) {
       minimumFractionDigits: 2,
     })}`;
 
-  const items = Array.isArray(sale?.items)
-    ? sale.items
-    : Array.isArray(sale?.saleItems)
-      ? sale.saleItems
-      : Array.isArray(sale?.details)
-        ? sale.details
-        : [];
+    const items = getDisplayItems(sale);
 
   const formattedDate = new Date(
     sale.createdAt || sale.date || Date.now(),
@@ -205,38 +200,27 @@ export default function Receipt({ sale }: any) {
                   </span>
                 </div>
               )}
-              {Number(sale.serviceOrder.laborCost) > 0 && (
-                <div className="flex justify-between pt-1 border-t border-black font-semibold">
-                  <span>Mano de Obra / Taller:</span>
-                  <span>{formatMoney(sale.serviceOrder.laborCost)}</span>
-                </div>
-              )}
+              
             </div>
           </>
         )}
 
         <div className="border-t border-dashed border-black my-2" />
 
-        {/* ITEMS / ARTÍCULOS */}
-                <div className="space-y-4 mb-4">
+               {/* ITEMS / ARTÍCULOS */}
+        <div className="space-y-4 mb-4">
           {items.length === 0 ? (
             <p className="text-center text-gray-500 italic">No hay artículos</p>
           ) : (
-            items.map((item: any, idx: number) => {
+            items.map((row, idx) => {
+              const item = row.raw;
+
               const productName =
                 item.product?.name ||
                 item.productName ||
                 item.name ||
                 item.description ||
                 "Artículo";
-
-              const quantity = Number(item.quantity ?? item.qty ?? 1);
-              const unitPrice = Number(
-                item.salePrice ?? item.price ?? item.unitPrice ?? 0,
-              );
-              const lineTotal = Number(
-                item.lineTotal ?? item.total ?? quantity * unitPrice,
-              );
 
               const rawSerials =
                 item.serialNumber ||
@@ -252,24 +236,6 @@ export default function Receipt({ sale }: any) {
                   ? [rawSerials]
                   : [];
 
-              const laborCost = Number(
-                item.laborCost ??
-                  item.serviceFee ??
-                  item.serviceCost ??
-                  item.repairFee ??
-                  item.labor ??
-                  0,
-              );
-
-              const calculatedLabor =
-                laborCost > 0
-                  ? laborCost
-                  : lineTotal > quantity * unitPrice
-                    ? lineTotal - quantity * unitPrice
-                    : 0;
-
-              const pureItemTotal = quantity * unitPrice;
-
               return (
                 <div
                   key={idx}
@@ -280,26 +246,17 @@ export default function Receipt({ sale }: any) {
                       {productName}
                     </span>
                     <span className="font-bold shrink-0">
-                      {formatMoney(
-                        calculatedLabor > 0 ? pureItemTotal : lineTotal,
-                      )}
+                      {formatMoney(row.lineTotal)}
                     </span>
                   </div>
 
                   <div className="text-gray-600 text-[10px] flex justify-between">
                     <span>
-                      {quantity} x {formatMoney(unitPrice)}
+                      {row.laborIncluded && row.quantity > 1
+                        ? `${row.quantity} unidades`
+                        : `${row.quantity} x ${formatMoney(row.unitPrice)}`}
                     </span>
                   </div>
-
-                  {calculatedLabor > 0 && (
-                    <div className="flex justify-between text-[10px] text-black pl-2 border-l-2 border-black my-0.5">
-                      <span>Mano de Obra / Servicio</span>
-                      <span className="font-medium">
-                        {formatMoney(calculatedLabor)}
-                      </span>
-                    </div>
-                  )}
 
                   {serialsList.length > 0 && (
                     <div className="text-[10px] text-black font-mono mt-1 border border-black px-1.5 py-1 rounded space-y-0.5">

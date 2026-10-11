@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { BusinessSettings, Prisma, Sale } from "@prisma/client";
 import { EcfConnectorService, EcfConnectorException, EcfSendItem } from "./ecf-connector.service";
@@ -16,6 +16,8 @@ type SaleWithRelations = Sale & {
 
 @Injectable()
 export class EcfService {
+    private readonly logger = new Logger(EcfService.name);
+
     constructor(
         private prisma: PrismaService,
         private connector: EcfConnectorService,
@@ -55,13 +57,33 @@ export class EcfService {
         // subtotal = Σ(salePrice × cantidad) y luego SUMA el impuesto encima
         // (frontend/app/pos/page.tsx), nunca lo extrae de un precio con
         // impuesto incluido. No hay que volver a dividir aquí.
-        return sale.items.map((item) => ({
+                // Descuento del POS como porcentaje uniforme sobre el precio de lista
+        const listTotal = Number(sale.total) + Number(sale.discount);
+        const discountPct =
+            !sale.serviceOrderId && Number(sale.discount) > 0 && listTotal > 0
+                ? round((Number(sale.discount) / listTotal) * 100)
+                : 0;
+
+                const items: EcfSendItem[] = sale.items.map((item) => ({
             name: item.product?.name ?? "Producto",
             quantity: item.quantity,
             price_unit: round(Number(item.salePrice)),
             tax_ids: taxIds,
-            discount: 0,
+                       discount: discountPct,
         }));
+
+        // Reparaciones: la mano de obra no es una línea de la venta, pero sí está en lo
+        // que se cobró. La primera línea absorbe la diferencia para que las líneas sumen
+        // el subtotal de la venta, igual que la factura que ve el cliente.
+        if (sale.serviceOrderId && items.length > 0) {
+            const othersNet = items
+                .slice(1)
+                .reduce((acc, i) => acc + i.price_unit * i.quantity, 0);
+            const firstNet = round(Number(sale.subtotal) - othersNet);
+            items[0].price_unit = round(firstNet / (items[0].quantity || 1));
+        }
+
+        return items;
     }
 
     // invoice_date_due no es una "fecha de pago": el conector lo mapea al
@@ -98,13 +120,20 @@ export class EcfService {
             invoice_date_due: this.resolveInvoiceDateDue(sale),
             invoice_date: sale.createdAt.toISOString().split("T")[0],
             client_name: sale.customer?.name ?? "Consumidor Final",
-            client_vat: sale.customer?.taxId ?? undefined,
+                        client_vat: sale.customer?.taxId?.replace(/\D/g, "") || undefined,
             income_type: "01",
             items: this.buildSaleItems(sale, settings),
         };
 
         try {
-            const result = await this.connector.send(settings.ecfBaseUrl!, settings.ecfApiKey!, payload);
+                        const result = await this.connector.send(settings.ecfBaseUrl!, settings.ecfApiKey!, payload);
+
+            if (Math.abs(Number(result.amount_total) - Number(sale.total)) > 0.01) {
+                this.logger.warn(
+                    `e-CF ${sale.ncf}: el total en el conector (${result.amount_total}) no coincide con el total de la venta (${sale.total}).`,
+                );
+            }
+
             return await this.prisma.sale.update({
                 where: { id: sale.id },
                 data: {
@@ -148,7 +177,8 @@ export class EcfService {
         if (!sale) throw new NotFoundException("Venta no encontrada.");
         if (!sale.ncf) throw new BadRequestException("La venta original no tiene NCF electrónico; no se puede generar una nota de crédito.");
 
-        const baseAmount = round(dto.baseAmount ?? Number(sale.total));
+                const baseAmount = round(dto.baseAmount ?? Number(sale.subtotal));
+
         const taxIds = settings.useItbis && settings.ecfTaxId ? [settings.ecfTaxId] : undefined;
 
         const { creditNote, expiryDate } = await this.prisma.$transaction(async (tx) => {
@@ -179,6 +209,13 @@ export class EcfService {
                 base_amount: baseAmount,
                 tax_ids: taxIds,
             });
+
+                        if (dto.baseAmount === undefined && Math.abs(Number(result.amount_total) - Number(sale.total)) > 0.01) {
+                this.logger.warn(
+                    `Nota de crédito ${creditNote.ncf}: el total en el conector (${result.amount_total}) no coincide con la factura original (${sale.total}).`,
+                );
+            }
+
             return await this.prisma.creditNote.update({
                 where: { id: creditNote.id },
                 data: {

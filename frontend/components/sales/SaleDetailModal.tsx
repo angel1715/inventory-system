@@ -6,6 +6,7 @@ import EcfStatusCard from "@/components/EcfStatusCard";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import toast from "react-hot-toast";
+import { getDisplayItems } from "@/lib/saleDisplay";
 
 export default function SaleDetailModal({ open, sale, onClose }: any) {
   const [currentSale, setCurrentSale] = useState(sale);
@@ -163,53 +164,34 @@ export default function SaleDetailModal({ open, sale, onClose }: any) {
             </div>
           </div>
 
-          {/* ITEMS */}
+                   {/* ITEMS */}
           <div className="space-y-4 mb-8">
-            {currentSale.items.map((item: any) => (
+            {getDisplayItems(currentSale).map((row, idx) => (
               <div
-                key={item.id}
+                key={row.raw.id ?? idx}
                 className="border rounded-2xl p-4 flex justify-between"
               >
                 <div>
                   <h3 className="text-gray-600 font-bold">
-                    {item.product?.name || "Producto sin nombre"}
+                    {row.raw.product?.name || "Producto sin nombre"}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Cantidad: {item.quantity}
+                    Cantidad: {row.quantity}
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <p className="text-gray-600 font-bold">
-                    RD${Number(item.salePrice || 0).toFixed(2)}
-                  </p>
-
+                  {!(row.laborIncluded && row.quantity > 1) && (
+                    <p className="text-gray-600 font-bold">
+                      RD${row.unitPrice.toFixed(2)}
+                    </p>
+                  )}
                   <p className="text-sm text-gray-500">
-                    Total: RD$
-                    {(item.quantity * Number(item.salePrice || 0)).toFixed(2)}
+                    Total: RD${row.lineTotal.toFixed(2)}
                   </p>
                 </div>
               </div>
-                       ))}
-
-            {Number(currentSale.serviceOrder?.laborCost) > 0 && (
-              <div className="border rounded-2xl p-4 flex justify-between">
-                <div>
-                  <h3 className="text-gray-600 font-bold">Mano de obra</h3>
-                  <p className="text-sm text-gray-500">
-                    Orden #{currentSale.serviceOrder.ticketNumber} ·{" "}
-                    {currentSale.serviceOrder.deviceBrand}{" "}
-                    {currentSale.serviceOrder.deviceModel}
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <p className="text-gray-600 font-bold">
-                    RD${Number(currentSale.serviceOrder.laborCost).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            )}
+            ))}
           </div>
 
           {/* TOTALS */}

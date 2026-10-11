@@ -49,9 +49,10 @@ export class SalesService {
 
     // Filtro de fechas para el listado de ventas
     private getDateFilter(range: "today" | "week" | "month") {
+                const key = String(range).toLowerCase();
         const start = new Date();
-        if (range === "today") start.setHours(0, 0, 0, 0);
-        else if (range === "week") start.setDate(start.getDate() - 7);
+        if (key === "today") start.setHours(0, 0, 0, 0);
+        else if (key === "week") start.setDate(start.getDate() - 7);
         else start.setMonth(start.getMonth() - 1);
         return { gte: start };
     }
@@ -421,10 +422,14 @@ export class SalesService {
                 const previousDebt = Number(creditAccount.currentDebt || 0);
                 const newDebtSnapshot = round(previousDebt + customTotal);
 
-                // Límite de crédito (maxCredit = 0 se interpreta como "sin límite")
+                                // Límite de crédito: 0 significa que el cliente no tiene crédito autorizado
                 const maxCredit = Number(creditAccount.maxCredit || 0);
-                if (maxCredit > 0 && round(previousDebt + customTotal - initialPayment) > maxCredit) {
-                    throw new BadRequestException("La venta supera el límite de crédito del cliente.");
+                if (round(previousDebt + customTotal - initialPayment) > maxCredit) {
+                    throw new BadRequestException(
+                        maxCredit <= 0
+                            ? "Este cliente no tiene crédito autorizado."
+                            : "La venta supera el límite de crédito del cliente."
+                    );
                 }
 
                 const receivableStatus =
@@ -523,7 +528,8 @@ export class SalesService {
     // =========================
     // OBTENER TODAS LAS VENTAS (LISTADO)
     // =========================
-    async findAll(
+   
+        async findAll(
         businessId: string,
         page: number,
         limit: number,
@@ -532,7 +538,10 @@ export class SalesService {
         dateRange: string
     ) {
         try {
-            const skip = (page - 1) * limit;
+            // limit = 0 significa "todas las ventas del filtro" (con un tope de seguridad)
+            const MAX_ROWS = 5000;
+            const take = limit > 0 ? Math.min(limit, MAX_ROWS) : MAX_ROWS;
+            const skip = limit > 0 ? Math.max(page - 1, 0) * take : 0;
             const term = (search ?? "").trim();
 
             const where: Prisma.SaleWhereInput = {
@@ -548,12 +557,12 @@ export class SalesService {
                 } : {})
             };
 
-            const [data, total] = await Promise.all([
+            const [data, total, totals] = await Promise.all([
                 this.prisma.sale.findMany({
                     where,
                     skip,
-                    take: limit,
-                                        include: {
+                    take,
+                    include: {
                         createdBy: { select: userSelect },
                         customer: true,
                         serviceOrder: {
@@ -570,7 +579,8 @@ export class SalesService {
                     },
                     orderBy: { createdAt: "desc" }
                 }),
-                this.prisma.sale.count({ where })
+                this.prisma.sale.count({ where }),
+                this.prisma.sale.aggregate({ where, _sum: { total: true } }),
             ]);
 
             return {
@@ -578,8 +588,9 @@ export class SalesService {
                 meta: {
                     total,
                     page,
-                    limit,
-                    totalPages: Math.ceil(total / limit)
+                    limit: take,
+                    totalPages: Math.max(1, Math.ceil(total / take)),
+                    totalAmount: Number(totals._sum.total ?? 0),
                 }
             };
 
@@ -589,22 +600,45 @@ export class SalesService {
         }
     }
 
-    async exportAll(businessId: string, paymentMethod: string, dateRange: string) {
+    // Todas las ventas del filtro, sin paginar y sin items (más liviano).
+    // startDate/endDate (ISO) tienen prioridad sobre dateRange.
+    async exportAll(
+        businessId: string,
+        paymentMethod: string = "ALL",
+        dateRange: string = "ALL",
+        startDate?: string,
+        endDate?: string,
+    ) {
+        const start = startDate ? new Date(startDate) : undefined;
+        const end = endDate ? new Date(endDate) : undefined;
+        const validStart = start && !isNaN(start.getTime()) ? start : undefined;
+        const validEnd = end && !isNaN(end.getTime()) ? end : undefined;
+
+        const createdAt =
+            validStart || validEnd
+                ? {
+                    ...(validStart ? { gte: validStart } : {}),
+                    ...(validEnd ? { lte: validEnd } : {}),
+                }
+                : dateRange !== "ALL"
+                    ? this.getDateFilter(dateRange as any)
+                    : undefined;
+
         const where: Prisma.SaleWhereInput = {
             businessId,
-            ...(paymentMethod !== "ALL" ? { paymentMethod: paymentMethod as any } : {}),
-            ...(dateRange !== "ALL" ? { createdAt: this.getDateFilter(dateRange as any) } : {}),
+            ...(paymentMethod !== "ALL" ? { paymentMethod: paymentMethod as PaymentMethod } : {}),
+            ...(createdAt ? { createdAt } : {}),
         };
 
         return this.prisma.sale.findMany({
             where,
-            include: {
+            select: {
+                id: true,
+                invoiceNumber: true,
+                createdAt: true,
+                paymentMethod: true,
+                total: true,
                 createdBy: { select: { name: true } },
-                items: {
-                    include: {
-                        product: { select: { name: true } }
-                    }
-                }
             },
             orderBy: { createdAt: "desc" }
         });

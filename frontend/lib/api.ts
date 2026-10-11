@@ -275,6 +275,15 @@ export const getSalesExport = (paymentMethod = "ALL", dateRange = "ALL") => {
   return request(`/sales/export?paymentMethod=${paymentMethod}&dateRange=${dateRange}`);
 };
 
+
+// Reporte: todas las ventas de un rango de fechas (ISO), sin paginar
+export const getSalesReport = (startDate?: string, endDate?: string) => {
+  const params = new URLSearchParams();
+  if (startDate) params.append("startDate", startDate);
+  if (endDate) params.append("endDate", endDate);
+  return request(`/sales/export?${params.toString()}`);
+};
+
 // =========================
 // SUPPLIERS
 // =========================
@@ -352,6 +361,10 @@ export async function getInventoryMovements(page = 1, limit = 20, search = "") {
 
 export async function getUsers() {
   return request("/users");
+}
+
+export async function getTechnicians() {
+  return request("/users/technicians");
 }
 
 export async function getUser(id: string) {

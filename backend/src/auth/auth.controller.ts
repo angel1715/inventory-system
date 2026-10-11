@@ -15,6 +15,8 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { Throttle } from '@nestjs/throttler';
+import { RolesGuard } from "./roles.guard";
+import { Roles } from "./roles.decorator";
 
 @Controller('auth')
 export class AuthController {
@@ -37,7 +39,8 @@ export class AuthController {
   }
 
   @Post("generate-invitation")
-  @UseGuards(AuthGuard("jwt"))
+  @UseGuards(AuthGuard("jwt"), RolesGuard)
+@Roles("ADMIN")
   async generateInvitation(@Request() req: any) {
     return await this.authService.generateInvitation(req.user);
   }

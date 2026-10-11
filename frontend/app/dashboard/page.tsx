@@ -10,8 +10,11 @@ import {
   AlertTriangle,
   RefreshCw,
   FileSpreadsheet,
-  BadgeDollarSign,
+   BadgeDollarSign,
   FileText,
+  ShoppingCart,
+  Wrench,
+  SearchCode,
 } from "lucide-react";
 import {
   AreaChart,
@@ -27,6 +30,7 @@ import {
   Legend,
 } from "recharts";
 import Link from "next/link";
+
 import toast from "react-hot-toast";
 
 import { useAuth } from "@/app/context/AuthContext";
@@ -124,9 +128,28 @@ export default function DashboardPage() {
     }
   }
 
+      // El empleado solo necesita su caja: no pide métricas
+  async function loadEmployeeHome() {
+    try {
+      setLoading(true);
+      setCash(await getCashSession());
+    } catch (err: any) {
+      toast.error(err?.message || "Error cargando la caja");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    if (authLoading || !user) return;
+
+    if (user.role === "EMPLOYEE") {
+      loadEmployeeHome();
+      return;
+    }
+
     load(range);
-  }, [range]);
+  }, [range, authLoading, user]);
 
   const safeSales = Array.isArray(stats?.salesByDay) ? stats.salesByDay : [];
   const safePayments = Array.isArray(stats?.paymentMethods)
@@ -159,6 +182,48 @@ export default function DashboardPage() {
     return (
       <div className="h-screen flex items-center justify-center bg-zinc-50">
         <RefreshCw className="w-10 h-10 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+    if (user?.role === "EMPLOYEE") {
+    const shortcuts = [
+      { href: "/pos", label: "Punto de Venta", description: "Facturar y cobrar", icon: ShoppingCart },
+      { href: "/cxc", label: "Cuentas por Cobrar", description: "Registrar abonos de clientes", icon: FileSpreadsheet },
+      { href: "/service-orders", label: "Órdenes de Servicio", description: "Recibir y dar seguimiento a reparaciones", icon: Wrench },
+      { href: "/dashboard/tracker", label: "Track IMEI/Serial", description: "Consultar el historial de un equipo", icon: SearchCode },
+    ];
+
+    return (
+      <div className="max-w-5xl mx-auto px-2 py-4 space-y-8">
+        <div>
+          <h1 className="text-4xl font-semibold tracking-tighter text-zinc-900">
+            Inicio
+          </h1>
+          <p className="text-zinc-500 mt-1">
+            Hola, {user.name}. ¿Qué vas a hacer?
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {shortcuts.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="bg-white border border-zinc-200 hover:border-zinc-300 rounded-3xl p-6 flex items-center gap-4 transition-all"
+            >
+              <div className="p-3 bg-zinc-100 rounded-2xl text-zinc-700">
+                <item.icon size={24} />
+              </div>
+              <div>
+                <p className="font-semibold text-zinc-900">{item.label}</p>
+                <p className="text-sm text-zinc-500">{item.description}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        <CashControl session={cash} refresh={loadEmployeeHome} />
       </div>
     );
   }

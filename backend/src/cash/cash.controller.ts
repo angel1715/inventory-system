@@ -34,10 +34,9 @@ export class CashController {
         );
     }
 
+       // ==========================================
+    // CIERRE DE CAJA (quien la abrió, o el dueño)
     // ==========================================
-    // CIERRE DE CAJA CHICA (SOLO EL DUEÑO)
-    // ==========================================
-    @Roles("OWNER")
     @Post("close")
     close(
         @Body() dto: CloseRegisterDto,
@@ -46,8 +45,9 @@ export class CashController {
         return this.cashService.closeRegister(
             req.user.businessId,
             req.user.id,
+            req.user.role,
             dto.actualCash,
-            dto.note, // ✅ Ahora sí enviamos la nota al servicio
+            dto.note,
         );
     }
 
@@ -71,6 +71,7 @@ export class CashController {
     // ==========================================
     // HISTORIAL DE SESIONES PASADAS
     // ==========================================
+        @Roles("OWNER")
     @Get("history")
     getHistory(@Request() req: any) {
         return this.cashService.getHistory(req.user.businessId);

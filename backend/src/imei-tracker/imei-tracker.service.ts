@@ -5,16 +5,18 @@ import { PrismaService } from '../prisma/prisma.service'; // Asegúrate de apunt
 export class ImeiTrackerService {
     constructor(private prisma: PrismaService) { }
 
-    async trackSerial(serialNumber: string) {
+        async trackSerial(serialNumber: string, businessId: string, role?: string) {
         const cleanSerial = serialNumber.trim().toUpperCase();
+        const canSeeCosts = role === "OWNER" || role === "ADMIN";
 
         // 1. Buscamos el serial usando el modelo correcto: itemSerial
         const serialRecord = await this.prisma.itemSerial.findFirst({
             where: {
-                serial: {
+                                serial: {
                     equals: cleanSerial,
                     mode: 'insensitive' // Por si acaso hay variaciones de minúsculas en la DB
-                }
+                },
+                product: { businessId },
             },
             include: {
                 product: true,
@@ -36,10 +38,12 @@ export class ImeiTrackerService {
         // 2. Buscamos si este IMEI ya fue despachado en alguna venta (SaleItem -> Sale)
         // Ya que en tu esquema SaleItem guarda el "serialNumber" como un String opcional
         const saleItemRecord = await this.prisma.saleItem.findFirst({
-            where: {
+                        where: {
                 productId: serialRecord.productId,
-                serialNumber: cleanSerial
+                serialNumber: cleanSerial,
+                sale: { businessId },
             },
+            orderBy: { sale: { createdAt: 'desc' } },
             include: {
                 sale: {
                     include: {
@@ -80,11 +84,14 @@ export class ImeiTrackerService {
                 sku: serialRecord.product.sku,
             },
             lifecycle: {
-                purchase: serialRecord.purchaseItem ? {
+                                purchase: serialRecord.purchaseItem ? {
                     date: serialRecord.purchaseItem.purchase.createdAt,
-                    invoiceNumber: serialRecord.purchaseItem.purchase.invoiceNumber,
-                    supplier: serialRecord.purchaseItem.purchase.supplier?.name || 'Proveedor Desconocido',
-                    costPrice: Number(serialRecord.purchaseItem.costPrice),
+                    // Factura, proveedor y costo: solo dueño o admin
+                    ...(canSeeCosts ? {
+                        invoiceNumber: serialRecord.purchaseItem.purchase.invoiceNumber,
+                        supplier: serialRecord.purchaseItem.purchase.supplier?.name || 'Proveedor Desconocido',
+                        costPrice: Number(serialRecord.purchaseItem.costPrice),
+                    } : {}),
                 } : null,
                 sale: saleItemRecord ? {
                     date: saleItemRecord.sale.createdAt,

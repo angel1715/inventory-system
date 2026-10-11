@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { ImeiTrackerService } from './imei-tracker.service';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { SubscriptionGuard } from '../subscription/subscription.guard';
@@ -8,8 +8,8 @@ import { SubscriptionGuard } from '../subscription/subscription.guard';
 export class ImeiTrackerController {
     constructor(private readonly imeiTrackerService: ImeiTrackerService) { }
 
-    @Get(':serial')
-    async getDeviceHistory(@Param('serial') serial: string) {
-        return this.imeiTrackerService.trackSerial(serial);
-    }
+      @Get(':serial')
+  track(@Param('serial') serial: string, @Req() req: any) {
+    return this.imeiTrackerService.trackSerial(serial, req.user.businessId, req.user.role);
+  }
 }

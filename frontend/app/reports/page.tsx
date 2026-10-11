@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 import ProtectedRoute from "@/components/ProtectedRoute";
+import RoleGuard from "@/components/RoleGuard";
 
-import { getSales } from "@/lib/api";
+import { getSalesReport } from "@/lib/api";
 
 import * as XLSX from "xlsx";
 
@@ -17,15 +19,27 @@ export default function ReportsPage() {
 
   const [loading, setLoading] = useState(true);
 
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+    const [from, setFrom] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("en-CA");
+  });
+  const [to, setTo] = useState(() => new Date().toLocaleDateString("en-CA"));
 
-  async function load() {
+   async function load() {
     try {
       setLoading(true);
 
-      const response = await getSales();
-      setSales(response.data || []);
+      const startDate = from
+        ? new Date(`${from}T00:00:00`).toISOString()
+        : undefined;
+      const endDate = to
+        ? new Date(`${to}T23:59:59.999`).toISOString()
+        : undefined;
+
+      const data = await getSalesReport(startDate, endDate);
+      setSales(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      toast.error(err?.message || "Error al cargar el reporte");
     } finally {
       setLoading(false);
     }
@@ -33,30 +47,12 @@ export default function ReportsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [from, to]);
 
   // FILTERED SALES
 
-  const filteredSales = useMemo(() => {
-    return sales.filter((sale) => {
-      const saleDate = new Date(sale.createdAt);
-
-      if (from && saleDate < new Date(from)) {
-        return false;
-      }
-
-      if (to) {
-        const end = new Date(to);
-        end.setHours(23, 59, 59);
-
-        if (saleDate > end) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [sales, from, to]);
+   // El filtro por fechas ya lo hace el servidor
+  const filteredSales = sales;
 
   // KPIs
 
@@ -118,6 +114,7 @@ export default function ReportsPage() {
 
   return (
     <ProtectedRoute>
+      <RoleGuard roles={["OWNER"]}>
       <div className="min-h-screen bg-gray-100 p-6">
         {/* HEADER */}
 
@@ -293,6 +290,7 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+      </RoleGuard>
     </ProtectedRoute>
   );
 }

@@ -6,7 +6,8 @@ import {
     Post,
     Patch,
     Query,
-    UseGuards,
+        UseGuards,
+    UseInterceptors,
     Request,
     Req,
 } from "@nestjs/common";
@@ -18,8 +19,11 @@ import { JwtAuthGuard } from "../auth/jwt.guard";
 import { Roles } from "../auth/roles.decorator";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
+import { RolesGuard } from "../auth/roles.guard";
+import { HideCostInterceptor } from "../common/hide-cost.interceptor";
 
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
+@UseInterceptors(HideCostInterceptor)
 @Controller("products")
 export class ProductsController {
     constructor(
@@ -85,6 +89,7 @@ export class ProductsController {
     }
 
     @Get("auto-purchases")
+    @Roles("OWNER")
     async autoPurchases(@Request() req: any) {
         return this.productsService.generateAutoPurchases(
             req.user.businessId,
@@ -92,6 +97,7 @@ export class ProductsController {
     }
 
     @Get("purchase-recommendations")
+    @Roles("OWNER")
     getPurchaseRecommendations(
         @Request() req: any,
     ) {
@@ -135,6 +141,7 @@ export class ProductsController {
     // UPDATE PRODUCT
     // ======================
     @Patch(":id")
+    @Roles("OWNER")
     update(
         @Param("id") id: string,
         @Body() data: any,
@@ -152,6 +159,7 @@ export class ProductsController {
     // UPDATE STOCK
     // ======================
     @Patch(":id/stock")
+    @Roles("OWNER")
     updateStock(
         @Param("id") id: string,
 

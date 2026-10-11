@@ -43,6 +43,14 @@ export class UsersService {
         });
     }
 
+      async findTechnicians(businessId: string) {
+    return this.prisma.user.findMany({
+      where: { businessId, active: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  }
+
     // =========================
     // GET ONE USER
     // =========================

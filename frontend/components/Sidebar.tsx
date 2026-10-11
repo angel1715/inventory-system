@@ -20,18 +20,17 @@ import {
   Wrench,
   FileSpreadsheet,
 } from "lucide-react";
-import RoleGuard from "./RoleGuard";
+import { useAuth } from "@/app/context/AuthContext";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "POS", icon: ShoppingCart },
-  { href: "/sales", label: "Ventas", icon: Receipt },
-  { href: "/inventory", label: "Inventario", icon: Package },
+  { href: "/sales", label: "Ventas", icon: Receipt, ownerOnly: true },
+  { href: "/inventory", label: "Inventario", icon: Package, ownerOnly: true },
   { href: "/cxc", label: "Cuentas por Cobrar", icon: FileSpreadsheet },
   { href: "/dashboard/tracker", label: "Track IMEI/Serial", icon: SearchCode },
   { href: "/service-orders", label: "Órdenes de Servicio", icon: Wrench },
 ];
-
 interface SidebarProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -39,6 +38,9 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
   const pathname = usePathname();
+    const { user } = useAuth();
+  const canSeeAdmin = user?.role === "OWNER" || user?.role === "ADMIN";
+  const visibleItems = navItems.filter((item) => canSeeAdmin || !item.ownerOnly);
 
   return (
     <>
@@ -83,7 +85,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="space-y-1">
-            {navItems.map((item) => {
+            {visibleItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -103,7 +105,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
             })}
 
             {/* Owner Only */}
-            <RoleGuard roles={["OWNER"]}>
+            {canSeeAdmin && (
               <div className="pt-6 mt-6 border-t border-white">
                 <p className="px-4 text-xs uppercase tracking-widest text-zinc-200 mb-3">
                   Administración
@@ -146,7 +148,7 @@ export default function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
                   })}
                 </div>
               </div>
-            </RoleGuard>
+           )}
           </div>
         </nav>
 

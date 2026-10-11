@@ -21,7 +21,10 @@ export class CustomersService {
     // ==========================================
     // CREATE CUSTOMER + CREDIT ACCOUNT
     // ==========================================
-    async create(dto: CreateCustomerDto, businessId: string) {
+        async create(dto: CreateCustomerDto, businessId: string, role?: string) {
+        // Solo el dueño (o admin) autoriza crédito: lo que cree un empleado queda sin crédito
+        const canGrantCredit = role === "OWNER" || role === "ADMIN";
+        const maxCredit = canGrantCredit ? (dto.maxCredit ?? 0) : 0;
         if (dto.taxId) {
             const exists = await this.prisma.customer.findFirst({
                 where: { businessId, taxId: dto.taxId },
@@ -45,7 +48,7 @@ export class CustomersService {
                 data: {
                     customerId: customer.id,
                     businessId,
-                    maxCredit: dto.maxCredit ?? 0,
+                    maxCredit,
                     currentDebt: 0,
                 },
             });

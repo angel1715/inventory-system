@@ -41,6 +41,12 @@ export class UsersController {
         );
     }
 
+      // Lista mínima para elegir técnico: cualquier rol (el empleado crea órdenes)
+  @Get("technicians")
+  technicians(@Req() req: any) {
+    return this.usersService.findTechnicians(req.user.businessId);
+  }
+
     // =========================
     // GET ONE USER
     // =========================

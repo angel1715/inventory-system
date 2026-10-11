@@ -11,7 +11,7 @@ export class SettingsService {
     // ==========================================
     // GESTIÓN DE CONFIGURACIÓN FISCAL (Empresa)
     // ==========================================
-    async getSettings(businessId: string) {
+        async getSettings(businessId: string, role?: string) {
         let settings = await this.prisma.businessSettings.findFirst({ where: { businessId } });
 
         // Auto-crear si no existe
@@ -26,22 +26,46 @@ export class SettingsService {
                 }
             });
         }
-        return settings;
+
+        // Llamadas internas (sin rol): configuración completa
+        if (role === undefined) return settings;
+
+        // Credenciales del conector e-CF: solo dueño y admin
+        const { ecfApiKey, ecfBaseUrl, ecfTaxId, ...safe } = settings;
+
+        if (role !== "OWNER" && role !== "ADMIN") return safe;
+
+        return {
+            ...safe,
+            ecfBaseUrl,
+            ecfTaxId,
+            // La clave nunca viaja completa al navegador
+            ecfApiKey: ecfApiKey ? `••••${ecfApiKey.slice(-4)}` : null,
+        };
     }
 
     async updateSettings(businessId: string, data: UpdateSettingsDto) {
+        // Si la clave llega vacía o enmascarada (••••1234) no se cambió: se conserva la guardada
+        const { ecfApiKey, ...rest } = data as any;
+        const keyChanged =
+            typeof ecfApiKey === "string" &&
+            ecfApiKey.trim() !== "" &&
+            !ecfApiKey.startsWith("••");
+        const keyData = keyChanged ? { ecfApiKey: ecfApiKey.trim() } : {};
+
         const existing = await this.prisma.businessSettings.findFirst({ where: { businessId } });
 
         if (!existing) {
             return await this.prisma.businessSettings.create({
-                data: { businessId, ...data }
+                data: { businessId, ...rest, ...keyData }
             });
         }
 
         return await this.prisma.businessSettings.update({
             where: { id: existing.id },
             data: {
-                ...data,
+                ...rest,
+                ...keyData,
                 // Si envían un logo vacío, mantenemos el anterior
                 logoUrl: data.logoUrl || existing.logoUrl
             }
@@ -58,23 +82,48 @@ export class SettingsService {
         });
     }
 
-    async createSequence(businessId: string, data: Prisma.NcfSequenceUncheckedCreateInput) {
-        // 1. Limpiamos 'data' para asegurarnos de que no traiga la relación 'business'
-        // que es la que está causando el conflicto de tipos
-        const { business, ...cleanData } = data as any;
+        async createSequence(businessId: string, data: Prisma.NcfSequenceUncheckedCreateInput) {
+        const raw = data as any;
 
-        if (cleanData.active) {
+        const type = String(raw.type ?? "").trim();
+        const prefix = String(raw.prefix ?? "").trim();
+        const startAt = Number(raw.startAt);
+        const endAt = Number(raw.endAt);
+        const expiryDate = new Date(raw.expiryDate);
+
+        if (!type || !prefix) {
+            throw new BadRequestException("El tipo y el prefijo son obligatorios.");
+        }
+        if (!Number.isInteger(startAt) || !Number.isInteger(endAt) || startAt < 1 || endAt < startAt) {
+            throw new BadRequestException("El rango de la secuencia no es válido.");
+        }
+        if (isNaN(expiryDate.getTime())) {
+            throw new BadRequestException("La fecha de vencimiento no es válida.");
+        }
+
+        const current = raw.current !== undefined ? Number(raw.current) : startAt;
+        if (!Number.isInteger(current) || current < startAt || current > endAt + 1) {
+            throw new BadRequestException("El número actual no está dentro del rango.");
+        }
+
+        if (raw.active) {
             await this.prisma.ncfSequence.updateMany({
-                where: { businessId, type: cleanData.type },
+                where: { businessId, type },
                 data: { active: false }
             });
         }
 
+        // Solo los campos esperados: nada más del cuerpo llega a la base de datos
         return await this.prisma.ncfSequence.create({
             data: {
-                ...cleanData,
-                current: cleanData.current ?? cleanData.startAt,
-                businessId
+                businessId,
+                type,
+                prefix,
+                startAt,
+                endAt,
+                current,
+                expiryDate,
+                active: !!raw.active,
             }
         });
     }
