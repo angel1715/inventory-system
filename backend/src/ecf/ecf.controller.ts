@@ -2,11 +2,13 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/co
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { SubscriptionGuard } from "../subscription/subscription.guard";
 import { Roles } from "../auth/roles.decorator";
+
 import { GetUser } from "../auth/decorators/get-user.decorator";
 import { EcfService } from "./ecf.service";
 import { CreateCreditNoteDto } from "./dto/create-credit-note.dto";
+import { RolesGuard } from "../auth/roles.guard";
 
-@UseGuards(JwtAuthGuard, SubscriptionGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, SubscriptionGuard)
 @Controller("ecf")
 export class EcfController {
     constructor(private ecfService: EcfService) { }
@@ -37,6 +39,7 @@ export class EcfController {
         return this.ecfService.refreshSaleStatus(businessId, saleId, live === "true");
     }
 
+    @Roles("OWNER")
     @Post("sales/:id/credit-note")
     issueCreditNote(
         @GetUser("businessId") businessId: string,

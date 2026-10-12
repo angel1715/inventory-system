@@ -1,35 +1,43 @@
 import { Controller, Post, Body, UseGuards, Request, Param, Get, Patch } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 import { UploadReceiptDto } from './dto/upload-receipt.dto';
+import { ApprovePaymentDto, ToggleStatusDto, UpdatePlanDto } from './dto/admin-subscription.dto';
 import { JwtAuthGuard } from '../auth/jwt.guard';
 import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
 
+// Todas las rutas exigen sesión. A propósito NO lleva SubscriptionGuard: un negocio con la
+// suscripción vencida tiene que poder subir su comprobante de pago.
+// RolesGuard deja pasar siempre al ADMIN (el operador de la plataforma).
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('subscription')
 export class SubscriptionController {
     constructor(private readonly subscriptionService: SubscriptionService) { }
-    // AdminController.ts (o SubscriptionController, donde esté tu POST)
-    @UseGuards(JwtAuthGuard)
+
+    // El dueño del negocio sube su comprobante de pago
+    @Roles('OWNER')
     @Post('upload-receipt')
     async uploadReceipt(@Request() req, @Body() dto: UploadReceiptDto) {
         const businessId = req.user.businessId;
-        // El servicio ya maneja la lógica, el guard y la notificación al admin
         return await this.subscriptionService.createManualPaymentLog(businessId, dto);
     }
 
-    @Get('all-subscriptions')
+    // ---------- Solo ADMIN ----------
+
     @Roles('ADMIN')
+    @Get('all-subscriptions')
     async getAllSubscriptions() {
         return await this.subscriptionService.getAllSubscriptions();
     }
 
-    @Post('manual-reactivate/:businessId')
     @Roles('ADMIN')
+    @Post('manual-reactivate/:businessId')
     async manualReactivate(@Param('businessId') businessId: string) {
         return await this.subscriptionService.reactivateSubscription(businessId);
     }
 
-    @Get('pending-payments')
     @Roles('ADMIN')
+    @Get('pending-payments')
     async getPendingPayments() {
         return await this.subscriptionService.getPendingPayments();
     }
@@ -39,31 +47,27 @@ export class SubscriptionController {
     async approve(
         @Param('businessId') businessId: string,
         @Param('paymentLogId') paymentLogId: string,
-        @Body() body: { planType: 'SUBSCRIPTION' | 'LIFETIME' }
+        @Body() dto: ApprovePaymentDto,
     ) {
-        // El servicio ya maneja la transacción y la notificación al cliente
-        return await this.subscriptionService.approveManualPayment(businessId, paymentLogId, body.planType);
+        return await this.subscriptionService.approveManualPayment(businessId, paymentLogId, dto.planType);
     }
 
-    // ESTE ES EL ENDPOINT PARA EL SWITCH
-    @Post('toggle-status/:businessId')
+    // Endpoint del switch de activar / cancelar
     @Roles('ADMIN')
+    @Post('toggle-status/:businessId')
     async toggleStatus(
         @Param('businessId') businessId: string,
-        @Body('status') status: 'ACTIVE' | 'CANCELED' // Unificado a CANCELED
+        @Body() dto: ToggleStatusDto,
     ) {
-        return await this.subscriptionService.toggleSubscriptionStatus(businessId, status);
+        return await this.subscriptionService.toggleSubscriptionStatus(businessId, dto.status);
     }
 
-    @Patch('update-plan/:businessId')
     @Roles('ADMIN')
+    @Patch('update-plan/:businessId')
     async updatePlan(
         @Param('businessId') businessId: string,
-        @Body() body: {
-            accessType: 'SUBSCRIPTION' | 'LIFETIME',
-            subscriptionStatus: 'ACTIVE' | 'CANCELED' // Unificado a CANCELED
-        }
+        @Body() dto: UpdatePlanDto,
     ) {
-        return await this.subscriptionService.updatePlan(businessId, body);
+        return await this.subscriptionService.updatePlan(businessId, dto);
     }
 }

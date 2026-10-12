@@ -4,7 +4,7 @@ import {
    NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { Prisma } from "@prisma/client";
+import { Prisma, ProductCategory } from "@prisma/client";
 import { CreateProductDto } from "./dto/create-product.dto";
 
 @Injectable()
@@ -16,14 +16,42 @@ export class ProductsService {
    // ======================
    // SKU GENERATOR
    // ======================
+
    private generateSKU() {
       return "SKU-" + Date.now();
+   }
+
+      // ======================
+   // HELPERS
+   // ======================
+   private async assertSupplier(supplierId: string, businessId: string) {
+      const supplier = await this.prisma.supplier.findFirst({
+         where: { id: supplierId, businessId },
+         select: { id: true },
+      });
+
+      if (!supplier) {
+         throw new BadRequestException("Proveedor no encontrado");
+      }
+   }
+
+   // Un código de barras o SKU repetido sale como error claro, no como un 500
+   private mapUniqueError(error: unknown): unknown {
+      if (
+         error instanceof Prisma.PrismaClientKnownRequestError &&
+         error.code === "P2002"
+      ) {
+         return new BadRequestException(
+            "Ya existe un producto con ese código de barras o SKU",
+         );
+      }
+      return error;
    }
 
    // ======================
    // CREATE PRODUCT
    // ======================
-   async create(
+      async create(
       dto: CreateProductDto,
       businessId: string,
    ) {
@@ -31,44 +59,53 @@ export class ProductsService {
          throw new BadRequestException("Stock cannot be negative");
       }
 
-      const exists = await this.prisma.product.findFirst({
-         where: {
-            barcode: dto.barcode,
-            businessId,
-         },
-      });
+      // Solo se valida si viene un código de barras. Con undefined, Prisma ignora
+      // el filtro y el producto "chocaba" con cualquier otro del negocio.
+      if (dto.barcode) {
+         const exists = await this.prisma.product.findFirst({
+            where: { barcode: dto.barcode, businessId },
+         });
 
-      if (exists) {
-         throw new BadRequestException("Barcode already exists");
+         if (exists) {
+            throw new BadRequestException("Barcode already exists");
+         }
       }
 
-      return this.prisma.$transaction(
-         async (tx) => {
-            const product = await tx.product.create({
-               data: {
-                  ...dto,
-                  businessId,
-                  sku: dto.sku || this.generateSKU(),
-                  minStock: dto.minStock ?? 5,
-                  // La categoría se incluye automáticamente mediante el spread del dto
-               },
-            });
+      const supplierId = (dto as { supplierId?: string }).supplierId;
+      if (supplierId) {
+         await this.assertSupplier(supplierId, businessId);
+      }
 
-            await tx.inventoryMovement.create({
-               data: {
-                  businessId,
-                  productId: product.id,
-                  type: "RESTOCK",
-                  quantity: dto.stock,
-                  previousStock: 0,
-                  newStock: dto.stock,
-                  note: "Initial stock load",
-               },
-            });
+      try {
+         return await this.prisma.$transaction(
+            async (tx) => {
+               const product = await tx.product.create({
+                  data: {
+                     ...dto,
+                     businessId,
+                     sku: dto.sku || this.generateSKU(),
+                     minStock: dto.minStock ?? 5,
+                  },
+               });
 
-            return product;
-         },
-      );
+               await tx.inventoryMovement.create({
+                  data: {
+                     businessId,
+                     productId: product.id,
+                     type: "RESTOCK",
+                     quantity: dto.stock,
+                     previousStock: 0,
+                     newStock: dto.stock,
+                     note: "Initial stock load",
+                  },
+               });
+
+               return product;
+            },
+         );
+      } catch (error) {
+         throw this.mapUniqueError(error);
+      }
    }
 
 
@@ -100,36 +137,150 @@ export class ProductsService {
    // ======================
    // UPDATE PRODUCT
    // ======================
-   async update(id: string, dto: any, businessId: string) {
-      // 1. Validamos primero que el producto exista Y pertenezca al negocio
-      await this.findOne(id, businessId);
+     async update(id: string, dto: any, businessId: string) {
+      const current = await this.findOne(id, businessId);
 
-      // 2. Extraemos los campos, incluyendo la nueva 'category'
-      const { isSerialized, hasExpiry, active, costPrice, salePrice, category, ...restOfData } = dto;
+      // Solo estos campos se pueden editar. Quedan fuera businessId, id, status,
+      // fechas y cualquier otro: antes se pasaban tal cual a la base de datos.
+      const data: Prisma.ProductUncheckedUpdateInput = {};
 
-      // Creamos el objeto de datos formateado
-      const updateData: any = {
-         ...restOfData,
+      const text = (value: unknown) => {
+         const clean = String(value ?? "").trim();
+         return clean === "" ? null : clean;
       };
+      const bool = (value: unknown) => value === true || value === "true";
 
-      // 3. Normalización de valores
-      if (isSerialized !== undefined) updateData.isSerialized = Boolean(isSerialized);
-      if (hasExpiry !== undefined) updateData.hasExpiry = Boolean(hasExpiry);
-      if (active !== undefined) updateData.active = Boolean(active);
-      if (category !== undefined) updateData.category = category; // Integración de categoría
+      if (dto.name !== undefined) {
+         const name = String(dto.name).trim();
+         if (!name) {
+            throw new BadRequestException("El nombre no puede estar vacío");
+         }
+         data.name = name;
+      }
 
-      // Asignación directa de precios
-      if (costPrice !== undefined) updateData.costPrice = costPrice;
-      if (salePrice !== undefined) updateData.salePrice = salePrice;
+      if (dto.description !== undefined) data.description = text(dto.description);
+      if (dto.imageUrl !== undefined) data.imageUrl = text(dto.imageUrl);
+      if (dto.lotNumber !== undefined) data.lotNumber = text(dto.lotNumber);
 
-      // 4. Actualizamos asegurando el contexto del negocio
-      return this.prisma.product.update({
-         where: {
-            id,
-            businessId,
-         },
-         data: updateData,
-      });
+      if (dto.sku !== undefined) {
+         const sku = text(dto.sku);
+         if (sku) data.sku = sku; // un SKU vacío se ignora: se conserva el actual
+      }
+
+      if (dto.barcode !== undefined) {
+         const barcode = text(dto.barcode);
+
+         if (barcode) {
+            const duplicated = await this.prisma.product.findFirst({
+               where: { businessId, barcode, NOT: { id } },
+               select: { id: true },
+            });
+
+            if (duplicated) {
+               throw new BadRequestException("Barcode already exists");
+            }
+         }
+
+         data.barcode = barcode;
+      }
+
+      for (const field of ["costPrice", "salePrice"] as const) {
+         const raw = dto[field];
+         if (raw !== undefined && raw !== null && raw !== "") {
+            const value = Number(raw);
+            if (!Number.isFinite(value) || value < 0) {
+               throw new BadRequestException(
+                  "Los precios deben ser números mayores o iguales a cero",
+               );
+            }
+            data[field] = value;
+         }
+      }
+
+      if (dto.minStock !== undefined && dto.minStock !== null && dto.minStock !== "") {
+         const minStock = Number(dto.minStock);
+         if (!Number.isInteger(minStock) || minStock < 0) {
+            throw new BadRequestException(
+               "El stock mínimo debe ser un entero mayor o igual a cero",
+            );
+         }
+         data.minStock = minStock;
+      }
+
+      if (dto.category !== undefined) {
+         if (!Object.values(ProductCategory).includes(dto.category)) {
+            throw new BadRequestException("Categoría inválida");
+         }
+         data.category = dto.category;
+      }
+
+      if (dto.isSerialized !== undefined) data.isSerialized = bool(dto.isSerialized);
+      if (dto.hasExpiry !== undefined) data.hasExpiry = bool(dto.hasExpiry);
+      if (dto.active !== undefined) data.active = bool(dto.active);
+
+      if (dto.expiryDate !== undefined) {
+         if (!dto.expiryDate) {
+            data.expiryDate = null;
+         } else {
+            const date = new Date(dto.expiryDate);
+            if (isNaN(date.getTime())) {
+               throw new BadRequestException("La fecha de vencimiento no es válida");
+            }
+            data.expiryDate = date;
+         }
+      }
+
+      if (dto.supplierId !== undefined) {
+         if (dto.supplierId) {
+            await this.assertSupplier(dto.supplierId, businessId);
+            data.supplierId = dto.supplierId;
+         } else {
+            data.supplierId = null;
+         }
+      }
+
+      // Si el formulario trae un stock distinto, se aplica como AJUSTE con su
+      // movimiento de inventario (antes cambiaba sin dejar rastro).
+      let delta = 0;
+      if (dto.stock !== undefined && dto.stock !== null && dto.stock !== "") {
+         const newStock = Number(dto.stock);
+         if (!Number.isInteger(newStock) || newStock < 0) {
+            throw new BadRequestException(
+               "El stock debe ser un entero mayor o igual a cero",
+            );
+         }
+         delta = newStock - current.stock;
+      }
+
+      try {
+         return await this.prisma.$transaction(async (tx) => {
+            const updated = await tx.product.update({
+               where: { id, businessId },
+               data: {
+                  ...data,
+                  ...(delta !== 0 ? { stock: { increment: delta } } : {}),
+               },
+            });
+
+            if (delta !== 0) {
+               await tx.inventoryMovement.create({
+                  data: {
+                     businessId,
+                     productId: id,
+                     type: "ADJUSTMENT",
+                     quantity: delta,
+                     previousStock: updated.stock - delta,
+                     newStock: updated.stock,
+                     note: "Ajuste desde la edición del producto",
+                  },
+               });
+            }
+
+            return updated;
+         });
+      } catch (error) {
+         throw this.mapUniqueError(error);
+      }
    }
 
    // ======================
@@ -166,7 +317,7 @@ export class ProductsService {
                { sku: { contains: search } },
             ],
          },
-         include: { supplier: true },
+         
          take: 20,
          orderBy: { name: "asc" },
       });
@@ -175,39 +326,39 @@ export class ProductsService {
    // ======================
    // UPDATE STOCK (SAFE AGAINST RACE CONDITIONS)
    // ======================
-   async updateStock(
+      async updateStock(
       id: string,
       quantity: number,
       businessId: string,
       note?: string,
    ) {
-      if (quantity <= 0) {
+      const qty = Number(quantity);
+
+      if (!Number.isInteger(qty) || qty <= 0) {
          throw new BadRequestException("Quantity must be greater than zero");
       }
 
       // Validamos propiedad antes de operar
-      const currentProduct = await this.findOne(id, businessId);
-      const previousStock = currentProduct.stock;
+      await this.findOne(id, businessId);
 
       return this.prisma.$transaction(async (tx) => {
-         // Usamos incremento atómico de base de datos para evitar Race Conditions
+         // Incremento atómico; "status" vuelve a AVAILABLE porque ya hay existencia
          const updatedProduct = await tx.product.update({
             where: { id },
             data: {
-               stock: {
-                  increment: quantity
-               }
-            }
+               stock: { increment: qty },
+               status: "AVAILABLE",
+            },
          });
 
-         // Registramos el movimiento histórico de inventario
+         // previousStock sale del resultado de la transacción, no de una lectura anterior
          await tx.inventoryMovement.create({
             data: {
                businessId,
                productId: id,
                type: "RESTOCK",
-               quantity: quantity,
-               previousStock,
+               quantity: qty,
+               previousStock: updatedProduct.stock - qty,
                newStock: updatedProduct.stock,
                note: note || "Manual stock replenishment",
             },
@@ -364,8 +515,9 @@ export class ProductsService {
          where: {
             serial: serial,
             isSold: false,
-            product: {
+                        product: {
                businessId: businessId,
+               active: true,
             },
          },
          include: {

@@ -7,9 +7,11 @@ import {
 import { JwtAuthGuard } from "../auth/jwt.guard";
 import { PrismaService } from "../prisma/prisma.service";
 import { GetUser } from "../auth/decorators/get-user.decorator"; // Asegúrate de importar tu decorador
-
+import { RolesGuard } from "../auth/roles.guard";
+import { Roles } from "../auth/roles.decorator";
 @Controller("audit")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles("OWNER")
 export class AuditController {
 
     constructor(

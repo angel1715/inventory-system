@@ -19,14 +19,9 @@ import { SubscriptionGuard } from "../subscription/subscription.guard";
 export class CashController {
     constructor(private readonly cashService: CashService) { }
 
-    // ==========================================
-    // APERTURA DE CAJA CHICA
-    // ==========================================
+    // Apertura: cualquier rol (el empleado abre su turno)
     @Post("open")
-    open(
-        @Body() dto: OpenRegisterDto,
-        @Request() req: any,
-    ) {
+    open(@Body() dto: OpenRegisterDto, @Request() req: any) {
         return this.cashService.openRegister(
             req.user.businessId,
             req.user.id,
@@ -34,14 +29,9 @@ export class CashController {
         );
     }
 
-       // ==========================================
-    // CIERRE DE CAJA (quien la abrió, o el dueño)
-    // ==========================================
+    // Cierre: quien la abrió, o el dueño / admin (se valida en el service)
     @Post("close")
-    close(
-        @Body() dto: CloseRegisterDto,
-        @Request() req: any,
-    ) {
+    close(@Body() dto: CloseRegisterDto, @Request() req: any) {
         return this.cashService.closeRegister(
             req.user.businessId,
             req.user.id,
@@ -51,27 +41,18 @@ export class CashController {
         );
     }
 
-
-    // ==========================================
-    // ESTADO DE LA SESIÓN EN DESARROLLO
-    // ==========================================
     @Get("current")
     getCurrent(@Request() req: any) {
         return this.cashService.getCurrentSession(req.user.businessId);
     }
 
-    // ==========================================
-    // ARQUEO EN VIVO (MÉTODO CENTRALIZADO)
-    // ==========================================
     @Get("summary")
     getSummary(@Request() req: any) {
         return this.cashService.getSummary(req.user.businessId);
     }
 
-    // ==========================================
-    // HISTORIAL DE SESIONES PASADAS
-    // ==========================================
-        @Roles("OWNER")
+    // El historial de turnos, con montos y diferencias, solo para el dueño
+    @Roles("OWNER")
     @Get("history")
     getHistory(@Request() req: any) {
         return this.cashService.getHistory(req.user.businessId);
