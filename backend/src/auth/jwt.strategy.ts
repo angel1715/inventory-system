@@ -38,30 +38,33 @@ export class JwtStrategy
         });
     }
 
-    async validate(payload: any) {
-        // FIND USER
-        const user =
-            await this.prisma.user.findUnique({
-                where: {
-                    id: payload.sub,
-                },
-            });
+       async validate(payload: any) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: {
+                id: true,
+                email: true,
+                role: true,
+                name: true,
+                businessId: true,
+                active: true,
+                business: { select: { active: true } },
+            },
+        });
 
-        // USER NOT FOUND
         if (!user) {
-            throw new UnauthorizedException(
-                "User no longer exists"
-            );
+            throw new UnauthorizedException("User no longer exists");
         }
 
-        // DISABLED USER
         if (!user.active) {
-            throw new UnauthorizedException(
-                "User account disabled"
-            );
+            throw new UnauthorizedException("User account disabled");
         }
 
-        // SAFE USER OBJECT (FIXED)
+        // Negocio suspendido: ningún usuario suyo puede operar
+        if (user.business && user.business.active === false) {
+            throw new UnauthorizedException("Business disabled");
+        }
+
         return {
             id: user.id,
             email: user.email,

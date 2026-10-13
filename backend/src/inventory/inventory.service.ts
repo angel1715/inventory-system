@@ -2,10 +2,12 @@ import {
     Injectable,
     BadRequestException,
     NotFoundException,
-    InternalServerErrorException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { Prisma } from "@prisma/client";
+
+const SERIALIZED_MESSAGE =
+    "Este producto se controla por IMEI/serial: su existencia cambia con las compras y las ventas, no por cantidad.";
 
 @Injectable()
 export class InventoryService {
@@ -16,9 +18,8 @@ export class InventoryService {
         const skip = (page - 1) * limit;
         const normalizedSearch = search.trim();
 
-        // Blindaje: Solo traer movimientos de este negocio
         const where: Prisma.InventoryMovementWhereInput = {
-            businessId, 
+            businessId,
             ...(normalizedSearch && {
                 OR: [
                     { product: { name: { contains: normalizedSearch, mode: Prisma.QueryMode.insensitive } } },
@@ -32,7 +33,11 @@ export class InventoryService {
                 skip,
                 take: limit,
                 where,
-                include: { product: true, user: true },
+                include: {
+                    product: { select: { id: true, name: true, sku: true, barcode: true } },
+                    // Nunca "user: true": devolvería el hash de la contraseña
+                    user: { select: { id: true, name: true, email: true } },
+                },
                 orderBy: { createdAt: "desc" },
             }),
             this.prisma.inventoryMovement.count({ where }),
@@ -46,19 +51,20 @@ export class InventoryService {
 
     async restockProduct(productId: string, quantity: number, userId: string, businessId: string, note?: string) {
         return this.prisma.$transaction(async (tx) => {
-            // Blindaje: El producto DEBE pertenecer a este negocio
             const product = await tx.product.findUnique({ where: { id: productId, businessId } });
             if (!product) throw new NotFoundException("Producto no encontrado o no pertenece a este negocio");
+
+            if (product.isSerialized) throw new BadRequestException(SERIALIZED_MESSAGE);
 
             const previousStock = product.stock;
             const updated = await tx.product.update({
                 where: { id: productId },
-                data: { stock: { increment: quantity } },
+                data: { stock: { increment: quantity }, status: "AVAILABLE" },
             });
 
             await tx.inventoryMovement.create({
                 data: {
-                    businessId, // Registro de auditoría con tenant
+                    businessId,
                     productId,
                     type: "RESTOCK",
                     quantity,
@@ -75,9 +81,10 @@ export class InventoryService {
 
     async writeOffProduct(productId: string, quantity: number, userId: string, businessId: string, reason: string) {
         return this.prisma.$transaction(async (tx) => {
-            // Blindaje: El producto DEBE pertenecer a este negocio
             const product = await tx.product.findUnique({ where: { id: productId, businessId } });
             if (!product) throw new NotFoundException("Producto no encontrado o no pertenece a este negocio");
+
+            if (product.isSerialized) throw new BadRequestException(SERIALIZED_MESSAGE);
 
             if (product.stock < quantity) {
                 throw new BadRequestException(`Stock insuficiente. Disponible: ${product.stock}`);
@@ -91,7 +98,7 @@ export class InventoryService {
 
             await tx.inventoryMovement.create({
                 data: {
-                    businessId, // Registro de auditoría con tenant
+                    businessId,
                     productId,
                     type: "ADJUSTMENT",
                     quantity: -quantity,

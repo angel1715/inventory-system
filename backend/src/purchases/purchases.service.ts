@@ -2,151 +2,216 @@ import {
     Injectable,
     BadRequestException,
     NotFoundException,
+    Logger,
 } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { CreatePurchaseDto } from "./dto/create-purchase.dto";
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+type PurchaseLine = {
+    productId: string;
+    quantity: number;
+    costPrice: number;
+    lineTotal: number;
+    serials: string[];
+    batch?: { batchNumber: string; expiryDate: string };
+};
+
 @Injectable()
 export class PurchasesService {
+    private readonly logger = new Logger(PurchasesService.name);
+
     constructor(private prisma: PrismaService) { }
 
     // =========================
     // CREATE PURCHASE
     // =========================
-    // ... dentro de PurchasesService
-    // =========================
-    // CREATE PURCHASE - BLINDADO
-    // =========================
-    // =========================
-    // CREATE PURCHASE - BLINDADO
-    // =========================
     async create(dto: CreatePurchaseDto, businessId: string, userId: string) {
-        if (!dto.items?.length) throw new BadRequestException("Purchase items are required");
+        if (!dto.items?.length) {
+            throw new BadRequestException("La compra debe tener al menos un artículo.");
+        }
 
         try {
-            return await this.prisma.$transaction(async (tx) => {
-                // 1. VALIDAR PROVEEDOR
-                const supplier = await tx.supplier.findFirst({ where: { id: dto.supplierId, businessId } });
-                if (!supplier) throw new BadRequestException("Supplier not found");
-
-                let total = 0;
-                const processedItems: { item: any; product: any; itemTotal: number }[] = [];
-
-                for (const item of dto.items) {
-                    const product = await tx.product.findFirst({
-                        where: { id: item.productId, businessId },
+            return await this.prisma.$transaction(
+                async (tx) => {
+                    // 1. Proveedor del negocio
+                    const supplier = await tx.supplier.findFirst({
+                        where: { id: dto.supplierId, businessId },
                     });
+                    if (!supplier) throw new BadRequestException("Proveedor no encontrado.");
 
-                    if (!product) throw new NotFoundException(`Product ${item.productId} not found`);
+                    // 2. Validar cada línea
+                    let total = 0;
+                    const seenSerials = new Set<string>();
+                    const lines: PurchaseLine[] = [];
 
-                    // VALIDACIÓN IMEI/SERIADOS
-                    if (product.isSerialized) {
-                        if (!item.serials || item.serials.length !== item.quantity) {
-                            throw new BadRequestException(`Product '${product.name}' requires exactly ${item.quantity} serials.`);
+                    for (const item of dto.items as any[]) {
+                        const quantity = Number(item.quantity);
+                        const costPrice = Number(item.costPrice);
+
+                        if (!Number.isInteger(quantity) || quantity <= 0) {
+                            throw new BadRequestException("La cantidad de cada artículo debe ser un entero mayor a cero.");
                         }
-                        const existingSerials = await tx.itemSerial.findMany({
-                            where: { serial: { in: item.serials }, productId: product.id },
-                            select: { serial: true }
+                        if (!Number.isFinite(costPrice) || costPrice < 0) {
+                            throw new BadRequestException("El costo de cada artículo no puede ser negativo.");
+                        }
+
+                        const product = await tx.product.findFirst({
+                            where: { id: item.productId, businessId },
                         });
+                        if (!product) throw new NotFoundException(`Producto ${item.productId} no encontrado.`);
 
-                        if (existingSerials.length > 0) {
-                            const serialsList = existingSerials.map(s => s.serial).join(', ');
-                            throw new BadRequestException(`Conflicto de IMEI: Los siguientes números ya existen: ${serialsList}`);
+                        let serials: string[] = [];
+
+                        if (product.isSerialized) {
+                            serials = (item.serials ?? [])
+                                .map((s: string) => String(s).trim().toUpperCase())
+                                .filter(Boolean);
+
+                            if (serials.length !== quantity) {
+                                throw new BadRequestException(
+                                    `El producto "${product.name}" requiere exactamente ${quantity} IMEI/seriales.`,
+                                );
+                            }
+
+                            for (const serial of serials) {
+                                if (seenSerials.has(serial)) {
+                                    throw new BadRequestException(`El IMEI/serial ${serial} está repetido en la compra.`);
+                                }
+                                seenSerials.add(serial);
+                            }
+
+                            // Un IMEI identifica un equipo físico: no puede estar dos veces en el negocio
+                            const existing = await tx.itemSerial.findMany({
+                                where: {
+                                    serial: { in: Array.from(new Set([...serials, ...serials.map((s) => s.toLowerCase())])) },
+                                    product: { businessId },
+                                },
+                                select: { serial: true },
+                            });
+
+                            if (existing.length > 0) {
+                                throw new BadRequestException(
+                                    `Conflicto de IMEI: ya existen en el inventario: ${existing.map((s) => s.serial).join(", ")}`,
+                                );
+                            }
                         }
+
+                        const lineTotal = round2(quantity * costPrice);
+                        total = round2(total + lineTotal);
+
+                        lines.push({
+                            productId: product.id,
+                            quantity,
+                            costPrice,
+                            lineTotal,
+                            serials,
+                            batch: item.batch,
+                        });
                     }
 
-                    const itemTotal = Number(item.quantity) * Number(item.costPrice);
-                    total += itemTotal;
-                    processedItems.push({ item, product, itemTotal });
-                }
-
-                // 3. CABECERA
-                const purchase = await tx.purchase.create({
-                    data: {
-                        invoiceNumber: `PUR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                        supplierId: dto.supplierId,
-                        total,
-                        businessId,
-                        status: "COMPLETED",
-                    },
-                });
-
-                // 4. PROCESAR LÍNEAS
-                for (const { item, product, itemTotal } of processedItems) {
-                    const purchaseItem = await tx.purchaseItem.create({
+                    // 3. Cabecera
+                    const purchase = await tx.purchase.create({
                         data: {
-                            purchaseId: purchase.id,
-                            productId: item.productId,
-                            quantity: item.quantity,
-                            costPrice: item.costPrice,
-                            total: itemTotal,
+                            invoiceNumber: `PUR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                            supplierId: dto.supplierId,
+                            total,
+                            businessId,
+                            status: "COMPLETED",
                         },
                     });
 
-                    // Seriales
-                    if (product.isSerialized) {
-                        await tx.itemSerial.createMany({
-                            data: item.serials.map((serial: string) => ({
-                                serial, productId: product.id, purchaseItemId: purchaseItem.id, isSold: false
-                            }))
+                    // 4. Líneas, stock y costo promedio
+                    for (const line of lines) {
+                        // Se vuelve a leer: si el mismo producto aparece en dos líneas, su stock ya cambió
+                        const product = await tx.product.findFirstOrThrow({
+                            where: { id: line.productId, businessId },
                         });
-                    }
 
-                    // Lotes
-                    if (product.hasExpiry && item.batch) {
-                        await tx.productBatch.create({
+                        const purchaseItem = await tx.purchaseItem.create({
                             data: {
-                                batchNumber: item.batch.batchNumber,
-                                expiryDate: new Date(item.batch.expiryDate),
-                                initialQuantity: item.quantity,
-                                currentQuantity: item.quantity,
+                                purchaseId: purchase.id,
+                                productId: line.productId,
+                                quantity: line.quantity,
+                                costPrice: line.costPrice,
+                                total: line.lineTotal,
+                            },
+                        });
+
+                        if (product.isSerialized) {
+                            await tx.itemSerial.createMany({
+                                data: line.serials.map((serial) => ({
+                                    serial,
+                                    productId: product.id,
+                                    purchaseItemId: purchaseItem.id,
+                                    isSold: false,
+                                })),
+                            });
+                        }
+
+                        if (product.hasExpiry && line.batch) {
+                            await tx.productBatch.create({
+                                data: {
+                                    batchNumber: line.batch.batchNumber,
+                                    expiryDate: new Date(line.batch.expiryDate),
+                                    initialQuantity: line.quantity,
+                                    currentQuantity: line.quantity,
+                                    productId: product.id,
+                                    purchaseItemId: purchaseItem.id,
+                                },
+                            });
+                        }
+
+                        const currentStock = product.stock;
+                        const newStock = currentStock + line.quantity;
+                        const currentValue = Math.max(currentStock, 0) * Number(product.costPrice);
+                        const newAverageCost = round2(
+                            (currentValue + line.quantity * line.costPrice) / newStock,
+                        );
+
+                        await tx.product.update({
+                            where: { id: product.id },
+                            data: {
+                                stock: { increment: line.quantity },
+                                costPrice: newAverageCost,
+                                status: "AVAILABLE",
+                            },
+                        });
+
+                        await tx.inventoryMovement.create({
+                            data: {
+                                businessId,
                                 productId: product.id,
-                                purchaseItemId: purchaseItem.id,
-                            }
+                                userId,
+                                type: "PURCHASE",
+                                quantity: line.quantity,
+                                previousStock: currentStock,
+                                newStock,
+                                note: `Ref: ${purchase.invoiceNumber}`,
+                            },
                         });
                     }
 
-                    // CÁLCULO ATÓMICO: Stock y Costo Promedio
-                    const currentStock = Number(product.stock);
-                    const incomingQty = Number(item.quantity);
-                    const newStock = currentStock + incomingQty;
-
-                    const currentTotalValue = currentStock * Number(product.costPrice);
-                    const incomingTotalValue = incomingQty * Number(item.costPrice);
-                    const newAverageCost = newStock > 0 ? (currentTotalValue + incomingTotalValue) / newStock : item.costPrice;
-
-                    await tx.product.update({
-                        where: { id: product.id },
-                        data: {
-                            stock: { increment: incomingQty },
-                            costPrice: newAverageCost,
-                        }
-                    });
-
-                    // MOVIMIENTO HISTÓRICO
-                    await tx.inventoryMovement.create({
-                        data: {
-                            businessId,
-                            productId: product.id,
-                            userId,
-                            type: "PURCHASE",
-                            quantity: incomingQty,
-                            previousStock: currentStock,
-                            newStock: newStock,
-                            note: `Ref: ${purchase.invoiceNumber}`
-                        }
-                    });
-                }
-
-                return purchase;
-            });
+                    return purchase;
+                },
+                {
+                    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+                    timeout: 30000,
+                    maxWait: 10000,
+                },
+            );
         } catch (error) {
-            // Relanzar errores conocidos de NestJS (para que el cliente los reciba con su status code correcto)
             if (error instanceof BadRequestException || error instanceof NotFoundException) {
                 throw error;
             }
-            // Error inesperado
-            console.error("Error crítico en registro de compra:", error);
+
+            if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+                throw new BadRequestException("Otra operación modificó el inventario al mismo tiempo. Intenta de nuevo.");
+            }
+
+            this.logger.error("Error crítico en registro de compra", error as any);
             throw new BadRequestException("No se pudo completar el registro de la compra. Por favor, verifique los datos.");
         }
     }
@@ -194,15 +259,17 @@ export class PurchasesService {
         });
 
         if (!purchase) {
-            throw new NotFoundException("Purchase not found");
+            throw new NotFoundException("Compra no encontrada.");
         }
 
         return purchase;
     }
 
     // ==========================================
-    // AUTO GENERATE REORDER DRAFTS (SAFE)
+    // BORRADORES DE REPOSICIÓN
     // ==========================================
+    // Como se llama con GET, no debe crear un borrador nuevo en cada visita:
+    // si el proveedor ya tiene uno abierto, se devuelve ese.
     async generateAutoPurchaseDrafts(businessId: string) {
         const products = await this.prisma.product.findMany({
             where: { businessId, active: true },
@@ -226,22 +293,32 @@ export class PurchasesService {
                 productId: product.id,
                 quantity,
                 costPrice: product.costPrice,
-                total: quantity * Number(product.costPrice),
+                total: round2(quantity * Number(product.costPrice)),
             });
         }
 
         const purchases: any[] = [];
 
         for (const [supplierId, items] of grouped.entries()) {
+            const existingDraft = await this.prisma.purchase.findFirst({
+                where: { businessId, supplierId, status: "DRAFT" },
+                include: { items: { include: { product: true } } },
+            });
+
+            if (existingDraft) {
+                purchases.push(existingDraft);
+                continue;
+            }
+
             const purchase = await this.prisma.purchase.create({
                 data: {
                     supplierId,
                     businessId,
-                    status: "DRAFT", // Se crea en DRAFT, no altera stock ni exige IMEIs todavía
-                    invoiceNumber: `PO-${Date.now()}`,
-                    total: items.reduce((acc, item) => acc + item.quantity * Number(item.costPrice), 0),
+                    status: "DRAFT", // No altera stock ni exige IMEI todavía
+                    invoiceNumber: `PO-${Date.now()}-${purchases.length}`,
+                    total: round2(items.reduce((acc, item) => acc + item.quantity * Number(item.costPrice), 0)),
                     items: {
-                        create: items.map(i => ({
+                        create: items.map((i) => ({
                             productId: i.productId,
                             quantity: i.quantity,
                             costPrice: i.costPrice,

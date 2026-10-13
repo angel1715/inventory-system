@@ -1,27 +1,20 @@
 import {
     Injectable,
+    BadRequestException,
     NotFoundException,
 } from "@nestjs/common";
 
 import { PrismaService } from "../prisma/prisma.service";
-
 import { CreateSupplierDto } from "./dto/create-supplier.dto";
 
 @Injectable()
 export class SuppliersService {
-
-    constructor(
-        private prisma: PrismaService,
-    ) { }
+    constructor(private prisma: PrismaService) { }
 
     // =========================
     // CREATE
     // =========================
-    async create(
-        dto: CreateSupplierDto,
-        businessId: string,
-    ) {
-
+    async create(dto: CreateSupplierDto, businessId: string) {
         return this.prisma.supplier.create({
             data: {
                 ...dto,
@@ -33,41 +26,23 @@ export class SuppliersService {
     // =========================
     // FIND ALL
     // =========================
-    async findAll(
-        businessId: string,
-    ) {
-
+    async findAll(businessId: string) {
         return this.prisma.supplier.findMany({
-            where: {
-                businessId,
-            },
-
-            orderBy: {
-                createdAt: "desc",
-            },
+            where: { businessId },
+            orderBy: { createdAt: "desc" },
         });
     }
 
     // =========================
     // FIND ONE
     // =========================
-    async findOne(
-        id: string,
-        businessId: string,
-    ) {
-
-        const supplier =
-            await this.prisma.supplier.findFirst({
-                where: {
-                    id,
-                    businessId,
-                },
-            });
+    async findOne(id: string, businessId: string) {
+        const supplier = await this.prisma.supplier.findFirst({
+            where: { id, businessId },
+        });
 
         if (!supplier) {
-            throw new NotFoundException(
-                "Supplier not found",
-            );
+            throw new NotFoundException("Proveedor no encontrado.");
         }
 
         return supplier;
@@ -76,22 +51,11 @@ export class SuppliersService {
     // =========================
     // UPDATE
     // =========================
-    async update(
-        id: string,
-        dto: CreateSupplierDto,
-        businessId: string,
-    ) {
-
-        await this.findOne(
-            id,
-            businessId,
-        );
+    async update(id: string, dto: CreateSupplierDto, businessId: string) {
+        await this.findOne(id, businessId);
 
         return this.prisma.supplier.update({
-            where: {
-                id,
-            },
-
+            where: { id },
             data: dto,
         });
     }
@@ -99,21 +63,21 @@ export class SuppliersService {
     // =========================
     // DELETE
     // =========================
-    async remove(
-        id: string,
-        businessId: string,
-    ) {
+    async remove(id: string, businessId: string) {
+        await this.findOne(id, businessId);
 
-        await this.findOne(
-            id,
-            businessId,
-        );
-
-        return this.prisma.supplier.delete({
-            where: {
-                id,
-            },
+        // Las compras exigen proveedor: borrarlo daba un 500 en la base de datos
+        const purchases = await this.prisma.purchase.count({
+            where: { supplierId: id, businessId },
         });
+
+        if (purchases > 0) {
+            throw new BadRequestException(
+                "Este proveedor tiene compras registradas y no se puede eliminar.",
+            );
+        }
+
+        // Sus productos quedan sin proveedor asignado
+        return this.prisma.supplier.delete({ where: { id } });
     }
 }
-

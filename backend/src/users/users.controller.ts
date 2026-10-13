@@ -7,7 +7,6 @@ import {
     Body,
     Req,
     UseGuards,
-    ForbiddenException,
 } from "@nestjs/common";
 
 import { UsersService } from "./users.service";
@@ -22,25 +21,17 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 
 import { JwtAuthGuard } from "../auth/jwt.guard";
 
+// Las reglas de quién puede ver o modificar a quién (ADMIN, último dueño, uno mismo)
+// viven en UsersService, que recibe al usuario autenticado.
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
     constructor(private readonly usersService: UsersService) { }
 
-    // El rol ADMIN opera toda la plataforma: un dueño nunca puede crearlo ni asignarlo.
-    private assertCanAssignRole(dto: any, req: any) {
-        if (dto?.role === Role.ADMIN && req.user.role !== Role.ADMIN) {
-            throw new ForbiddenException("No puedes asignar el rol ADMIN.");
-        }
-    }
-
-    // =========================
-    // GET ALL USERS
-    // =========================
     @Get()
     @Roles(Role.OWNER)
     findAll(@Req() req: any) {
-        return this.usersService.findAll(req.user.businessId);
+        return this.usersService.findAll(req.user.businessId, req.user);
     }
 
     // Lista mínima para elegir técnico: cualquier rol (el empleado crea órdenes).
@@ -50,41 +41,27 @@ export class UsersController {
         return this.usersService.findTechnicians(req.user.businessId);
     }
 
-    // =========================
-    // GET ONE USER
-    // =========================
     @Get(":id")
     @Roles(Role.OWNER)
     findOne(@Param("id") id: string, @Req() req: any) {
-        return this.usersService.findOne(id, req.user.businessId);
+        return this.usersService.findOne(id, req.user.businessId, req.user);
     }
 
-    // =========================
-    // CREATE USER
-    // =========================
     @Post()
     @Roles(Role.OWNER)
     create(@Body() dto: CreateUserDto, @Req() req: any) {
-        this.assertCanAssignRole(dto, req);
-        return this.usersService.create(dto, req.user.businessId);
+        return this.usersService.create(dto, req.user.businessId, req.user);
     }
 
-    // =========================
-    // UPDATE USER
-    // =========================
     @Patch(":id")
     @Roles(Role.OWNER)
     update(@Param("id") id: string, @Body() dto: UpdateUserDto, @Req() req: any) {
-        this.assertCanAssignRole(dto, req);
-        return this.usersService.update(id, dto, req.user.businessId);
+        return this.usersService.update(id, dto, req.user.businessId, req.user);
     }
 
-    // =========================
-    // TOGGLE ACTIVE
-    // =========================
     @Patch(":id/toggle-active")
     @Roles(Role.OWNER)
     toggleActive(@Param("id") id: string, @Req() req: any) {
-        return this.usersService.toggleActive(id, req.user.businessId, req.user.id);
+        return this.usersService.toggleActive(id, req.user.businessId, req.user);
     }
 }

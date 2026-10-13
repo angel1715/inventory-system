@@ -9,6 +9,15 @@ export class SubscriptionService {
     private readonly logger = new Logger(SubscriptionService.name);
     constructor(private prisma: PrismaService, private emailService: EmailService) { }
 
+        // Suma un mes sin desbordar (31 ene + 1 mes = 28/29 feb, no 3 mar)
+    private addOneMonth(from: Date): Date {
+        const d = new Date(from);
+        const day = d.getDate();
+        d.setMonth(d.getMonth() + 1);
+        if (d.getDate() < day) d.setDate(0);
+        return d;
+    }
+
     /**
      * Valida si el negocio tiene acceso activo (Trial, Subscription o Lifetime).
      */
@@ -27,7 +36,14 @@ export class SubscriptionService {
     }
 
     // Agrega esto a tu SubscriptionService
-    async createManualPaymentLog(businessId: string, dto: UploadReceiptDto) {
+        async createManualPaymentLog(businessId: string, dto: UploadReceiptDto) {
+        const pending = await this.prisma.manualPaymentLog.count({
+            where: { businessId, status: 'PENDING' },
+        });
+        if (pending >= 5) {
+            throw new BadRequestException('Ya tienes varios comprobantes pendientes de revisión. Espera a que se procesen.');
+        }
+
         try {
             // 1. Guardamos en BD e incluimos el negocio para obtener su nombre
             const log = await this.prisma.manualPaymentLog.create({
@@ -59,97 +75,113 @@ export class SubscriptionService {
      */
     // En subscription.service.ts
 
-    async approveManualPayment(businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') {
-
-        // 1. Buscamos el log con la relación al negocio
+       async approveManualPayment(businessId: string, paymentLogId: string, planType: 'SUBSCRIPTION' | 'LIFETIME' = 'SUBSCRIPTION') {
         const log = await this.prisma.manualPaymentLog.findUnique({
             where: { id: paymentLogId },
-            include: { business: true }
+            include: { business: true },
         });
 
         if (!log) throw new NotFoundException('Comprobante de pago no encontrado');
 
-        // AJUSTE DE SEGURIDAD: Validar que el negocio exista antes de continuar
-        if (!log.business) {
-            throw new Error('El comprobante no tiene un negocio asociado en la base de datos');
+        // El comprobante pertenece a un negocio concreto: la URL no puede apuntar a otro
+        if (log.businessId !== businessId) {
+            throw new BadRequestException('El comprobante no pertenece a ese negocio.');
         }
+
+        if (log.status !== 'PENDING') {
+            throw new BadRequestException('Este comprobante ya fue procesado.');
+        }
+
+        const now = new Date();
+        const current = await this.prisma.subscription.findUnique({ where: { businessId } });
+
+        // Pagar antes del vencimiento suma al periodo que queda, no lo pierde
+        const base =
+            current && current.accessType !== 'LIFETIME' && current.currentPeriodEnd > now
+                ? current.currentPeriodEnd
+                : now;
 
         const newExpiryDate = planType === 'LIFETIME'
             ? new Date(2099, 11, 31)
-            : new Date(new Date().setMonth(new Date().getMonth() + 1));
+            : this.addOneMonth(base);
 
-        // 2. Transacción
-        const result = await this.prisma.$transaction([
-            this.prisma.subscription.upsert({
+        const subscription = await this.prisma.$transaction(async (tx) => {
+            // Solo una aprobación gana: si otro clic ya la procesó, count es 0
+            const claimed = await tx.manualPaymentLog.updateMany({
+                where: { id: paymentLogId, status: 'PENDING' },
+                data: { status: 'APPROVED' },
+            });
+
+            if (claimed.count === 0) {
+                throw new BadRequestException('Este comprobante ya fue procesado.');
+            }
+
+            return tx.subscription.upsert({
                 where: { businessId },
                 update: {
                     accessType: planType,
                     subscriptionStatus: 'ACTIVE',
-                    currentPeriodEnd: newExpiryDate
+                    currentPeriodEnd: newExpiryDate,
                 },
                 create: {
-                    businessId: businessId,
+                    businessId,
                     accessType: planType,
                     subscriptionStatus: 'ACTIVE',
-                    currentPeriodEnd: newExpiryDate
+                    currentPeriodEnd: newExpiryDate,
                 },
-            }),
-            this.prisma.manualPaymentLog.update({
-                where: { id: paymentLogId },
-                data: { status: 'APPROVED' },
-            }),
-        ]);
+            });
+        });
 
-        // 3. Notificación al Cliente con DEBUGGING EXPLÍCITO
-        try {
-            const userEmail = log.business.email;
-            const userName = log.business.name;
-
-            console.log(`[DEBUG] Intentando enviar email a: ${userEmail} para el negocio: ${userName}`);
-
-            if (!userEmail) {
-                console.warn(`[WARN] El negocio ${userName} no tiene email configurado.`);
-            }
-
+        // Aviso al cliente, solo si el negocio tiene correo (antes se enviaba a una dirección inventada)
+        if (log.business.email) {
             await this.emailService.sendPaymentStatusUpdate(
-                userEmail || 'correo-no-disponible@ejemplo.com',
-                userName || 'Usuario',
-                'APPROVED'
+                log.business.email,
+                log.business.name,
+                'APPROVED',
             );
-
-            console.log("[DEBUG] Email enviado correctamente desde producción");
-
-        } catch (emailError) {
-            console.error("[ERROR CRÍTICO] Fallo al enviar email en producción:", emailError);
+        } else {
+            this.logger.warn(`El negocio ${log.business.name} no tiene correo: no se envió el aviso de pago aprobado.`);
         }
 
-        return result;
+        return subscription;
     }
+
     @Cron(CronExpression.EVERY_DAY_AT_8AM)
     async handleSubscriptionReminders() {
         this.logger.log('Ejecutando revisión de suscripciones próximas a vencer...');
 
-        const fiveDaysFromNow = new Date();
-        fiveDaysFromNow.setDate(fiveDaysFromNow.getDate() + 5);
-
-        // Buscamos suscripciones que vencen en ese rango de 24h
-        const start = new Date(fiveDaysFromNow.setHours(0, 0, 0, 0));
-        const end = new Date(fiveDaysFromNow.setHours(23, 59, 59, 999));
+        // Ventana de un día completo, dentro de 5 días
+        const target = new Date();
+        target.setDate(target.getDate() + 5);
+        const start = new Date(target);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(target);
+        end.setHours(23, 59, 59, 999);
 
         const expiringSubs = await this.prisma.subscription.findMany({
             where: {
                 currentPeriodEnd: { gte: start, lte: end },
-                accessType: 'SUBSCRIPTION'
+                accessType: { in: ['SUBSCRIPTION', 'TRIAL'] },
+                subscriptionStatus: 'ACTIVE',
             },
-            include: { business: true } // Asumiendo que tienes la relación en Prisma
+            include: { business: true },
         });
 
         for (const sub of expiringSubs) {
-            await this.emailService.sendSubscriptionReminder(
-                sub.business.email || 'correo@ejemplo.com',
-                sub.business.name,
-                sub.currentPeriodEnd
-            );
+            if (!sub.business.email) {
+                this.logger.warn(`El negocio ${sub.business.name} no tiene correo: no se envió el recordatorio.`);
+                continue;
+            }
+
+            try {
+                await this.emailService.sendSubscriptionReminder(
+                    sub.business.email,
+                    sub.business.name,
+                    sub.currentPeriodEnd,
+                );
+            } catch (error) {
+                this.logger.error(`Error enviando el recordatorio a ${sub.business.name}`);
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Req, Put, Patch } from "@nestjs/common";
+import { Controller, Post, Get, Body, Param, Query, UseGuards, Req, Put, Patch } from "@nestjs/common";
 import { CustomersService } from "./customers.service";
 import { CreateCustomerDto, RecordPaymentDto } from "./dto/customer.dto";
 import { JwtAuthGuard } from "../auth/jwt.guard";
@@ -22,6 +22,18 @@ export class CustomersController {
     async findAll(@Req() req: any) {
         const { businessId } = req.user;
         return this.customersService.findAll(businessId);
+
+    }
+
+        // Historial de recibos de pago: todos los roles (el cajero reimprime)
+    @Get("payments")
+    listPayments(@Req() req: any, @Query("customerId") customerId?: string) {
+        return this.customersService.listPaymentReceipts(req.user.businessId, customerId);
+    }
+    
+    @Get("payments/:receiptId")
+    getPayment(@Param("receiptId") receiptId: string, @Req() req: any) {
+        return this.customersService.getPaymentReceipt(receiptId, req.user.businessId);
     }
 
     @Get(":id/account-status")

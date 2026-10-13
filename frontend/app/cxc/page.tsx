@@ -14,7 +14,8 @@ import {
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RoleGuard from "@/components/RoleGuard";
 import { useAuth } from "@/app/context/AuthContext";
-import { getCustomers, recordPayment } from "@/lib/api";
+import { getCustomers, recordPayment, getPaymentReceipts } from "@/lib/api";
+import PaymentReceiptModal from "@/components/receipt/PaymentReceiptModal";
 
 type Customer = {
   id: string;
@@ -39,6 +40,9 @@ export default function CxCPage() {
   );
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   async function loadCxC() {
     try {
@@ -57,8 +61,18 @@ export default function CxCPage() {
     }
   }
 
+    async function loadReceipts() {
+    try {
+      const data = await getPaymentReceipts();
+      setReceipts(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error(err);
+    }
+  }
+
   useEffect(() => {
     loadCxC();
+    loadReceipts();
   }, []);
 
   const totalInTheStreet = debtors.reduce((acc, c) => acc + c.currentDebt, 0);
@@ -89,7 +103,7 @@ export default function CxCPage() {
 
     try {
       setSubmitting(true);
-      await recordPayment(selectedCustomer.id, {
+           const result = await recordPayment(selectedCustomer.id, {
         amount: parsedAmount,
         note: note.trim() || undefined,
       });
@@ -97,8 +111,15 @@ export default function CxCPage() {
       toast.success(
         `🎉 Cobro de RD$ ${parsedAmount.toLocaleString()} procesado correctamente`,
       );
-      setOpenModal(false);
-      await loadCxC();
+            setOpenModal(false);
+
+      // El recibo se muestra para imprimirlo y queda guardado en el historial
+      if (result?.receipt) {
+        setSelectedReceipt(result.receipt);
+        setReceiptOpen(true);
+      }
+
+      await Promise.all([loadCxC(), loadReceipts()]);
       router.refresh();
     } catch (err: any) {
       toast.error(err?.message || "Error al procesar el cobro");
@@ -236,6 +257,62 @@ export default function CxCPage() {
               </div>
             )}
           </div>
+                 {/* Historial de recibos de pago */}
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden mt-8">
+            <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+              <ReceiptText className="text-gray-500" size={22} />
+              <h2 className="text-xl font-bold text-gray-800">Recibos de Pago</h2>
+            </div>
+
+            {receipts.length === 0 ? (
+              <div className="p-10 text-center text-gray-500 font-medium">
+                Aún no hay cobros registrados.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead className="bg-gray-50/70 border-b border-gray-100">
+                    <tr>
+                      <th className="p-4 text-sm font-bold text-gray-500">Recibo</th>
+                      <th className="p-4 text-sm font-bold text-gray-500">Fecha</th>
+                      <th className="p-4 text-sm font-bold text-gray-500">Cliente</th>
+                      <th className="p-4 text-sm font-bold text-gray-500">Monto</th>
+                      <th className="p-4 text-sm font-bold text-gray-500 text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {receipts.map((r) => (
+                      <tr key={r.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="p-4 font-mono text-sm font-bold text-gray-900">
+                          {r.receiptNumber}
+                        </td>
+                        <td className="p-4 text-gray-600 text-sm">
+                          {new Date(r.createdAt).toLocaleString("es-DO")}
+                        </td>
+                        <td className="p-4 text-gray-900 font-medium">
+                          {r.customer?.name}
+                        </td>
+                        <td className="p-4 text-green-700 font-bold">
+                          RD$ {Number(r.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => {
+                              setSelectedReceipt(r);
+                              setReceiptOpen(true);
+                            }}
+                            className="bg-black text-white hover:bg-gray-900 px-4 py-2 rounded-xl text-xs font-bold transition"
+                          >
+                            Ver / Reimprimir
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </RoleGuard>
 
@@ -294,6 +371,11 @@ export default function CxCPage() {
           </div>
         </div>
       )}
+          <PaymentReceiptModal
+        open={receiptOpen}
+        receipt={selectedReceipt}
+        onClose={() => setReceiptOpen(false)}
+      />
     </ProtectedRoute>
   );
 }

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AG-POS",
-  description: "Inventory POS System",
+  title: "AG-Admin",
+  description: "Inventory ERP System",
   manifest: "/manifest.json",
 };
 

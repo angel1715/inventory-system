@@ -250,6 +250,11 @@ export class ProductsService {
             );
          }
          delta = newStock - current.stock;
+                  if (delta !== 0 && current.isSerialized) {
+            throw new BadRequestException(
+               "Este producto se controla por IMEI/serial: su existencia no se ajusta por cantidad.",
+            );
+         }
       }
 
       try {
@@ -338,8 +343,14 @@ export class ProductsService {
          throw new BadRequestException("Quantity must be greater than zero");
       }
 
-      // Validamos propiedad antes de operar
-      await this.findOne(id, businessId);
+           // Validamos propiedad antes de operar
+      const product = await this.findOne(id, businessId);
+
+      if (product.isSerialized) {
+         throw new BadRequestException(
+            "Este producto se controla por IMEI/serial: su existencia cambia con las compras y las ventas, no por cantidad.",
+         );
+      }
 
       return this.prisma.$transaction(async (tx) => {
          // Incremento atómico; "status" vuelve a AVAILABLE porque ya hay existencia

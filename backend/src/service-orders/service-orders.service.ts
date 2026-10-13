@@ -218,9 +218,9 @@ export class ServiceOrdersService {
     async findAll(businessId: string) {
         return this.prisma.serviceOrder.findMany({
             where: { businessId },
-            include: {
+                        include: {
                 customer: true,
-                technician: true,
+                technician: { select: { id: true, name: true } },
             },
             orderBy: {
                 createdAt: "desc",
@@ -236,8 +236,8 @@ export class ServiceOrdersService {
         const order = await this.prisma.serviceOrder.findFirst({
             where: { id, businessId },
             include: {
-                customer: true,
-                technician: true,
+                                customer: true,
+                technician: { select: { id: true, name: true } },
                 sale: true,
                 items: {
                     include: { product: true },

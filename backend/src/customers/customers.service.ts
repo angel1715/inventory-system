@@ -3,6 +3,12 @@ import { PrismaService } from "../prisma/prisma.service";
 import { CreateCustomerDto, RecordPaymentDto } from "./dto/customer.dto"; // Asegúrate de agregar UpdateCustomerDto si lo usas
 import { CreditMovementType, PaymentMethod } from "@prisma/client";
 
+const receiptInclude = {
+    lines: true,
+    customer: { select: { id: true, name: true, taxId: true, phone: true } },
+    createdBy: { select: { name: true } },
+} as const;
+
 @Injectable()
 export class CustomersService {
     constructor(private prisma: PrismaService) { }
@@ -156,35 +162,50 @@ export class CustomersService {
     // ==========================================
     // En CustomersService.ts
 
-    async recordPayment(customerId: string, dto: RecordPaymentDto, businessId: string, userId: string) {
+        async recordPayment(customerId: string, dto: RecordPaymentDto, businessId: string, userId: string) {
         return this.prisma.$transaction(async (tx) => {
             // 1. Verificaciones iniciales
             const activeSession = await tx.cashSession.findFirst({ where: { businessId, status: "OPEN" } });
             if (!activeSession) throw new BadRequestException("Debe abrir la caja para registrar pagos.");
 
-            const account = await tx.creditAccount.findFirst({ where: { customerId, businessId } });            if (!account) throw new NotFoundException("Cuenta de crédito no encontrada.");
+            const account = await tx.creditAccount.findFirst({ where: { customerId, businessId } });
+            if (!account) throw new NotFoundException("Cuenta de crédito no encontrada.");
 
-            // Validar que el monto sea lógico
-            if (dto.amount <= 0) throw new BadRequestException("El monto debe ser mayor a cero.");
-            if (dto.amount > Number(account.currentDebt)) {
-                throw new BadRequestException(`El abono supera la deuda actual (RD$ ${account.currentDebt})`);
+            const amount = this.round(dto.amount);
+            if (!(amount > 0)) throw new BadRequestException("El monto debe ser mayor a cero.");
+
+            const debtBefore = Number(account.currentDebt);
+            if (amount > debtBefore) {
+                throw new BadRequestException(`El abono supera la deuda actual (RD$ ${debtBefore})`);
             }
 
-            // 2. Obtener facturas pendientes (ordenadas por antigüedad)
+            // 2. Facturas pendientes, de la más antigua a la más reciente
             const pendingARs = await tx.accountsReceivable.findMany({
-                where: { customerId, status: { in: ["PENDING", "PARTIAL"] } },
-                orderBy: { createdAt: "asc" }
+                where: {
+                    customerId,
+                    status: { in: ["PENDING", "PARTIAL"] },
+                    sale: { businessId },
+                },
+                include: { sale: { select: { invoiceNumber: true, ncf: true } } },
+                orderBy: { createdAt: "asc" },
             });
 
-            let remainingPayment = dto.amount;
+            // 3. Aplicar el pago a cada factura, guardando qué se aplicó (para el recibo)
+            let remainingPayment = amount;
             let totalPaid = 0;
+            const lines: {
+                saleId: string;
+                invoiceNumber: string;
+                ncf: string | null;
+                amountApplied: number;
+                pendingAfter: number;
+            }[] = [];
 
-            // 3. Aplicar pago a las facturas (Bucle de distribución)
             for (const ar of pendingARs) {
                 if (remainingPayment <= 0) break;
 
                 const pendingAmount = Number(ar.pendingAmount);
-                const paymentForThisAR = Math.min(remainingPayment, pendingAmount);
+                const paymentForThisAR = this.round(Math.min(remainingPayment, pendingAmount));
 
                 const newPaidAmount = this.round(Number(ar.paidAmount) + paymentForThisAR);
                 const newPending = this.round(pendingAmount - paymentForThisAR);
@@ -194,12 +215,12 @@ export class CustomersService {
                     data: {
                         paidAmount: newPaidAmount,
                         pendingAmount: newPending,
-                        status: newPending <= 0 ? "PAID" : "PARTIAL"
-                    }
+                        status: newPending <= 0 ? "PAID" : "PARTIAL",
+                    },
                 });
 
-                remainingPayment -= paymentForThisAR;
-                totalPaid += paymentForThisAR;
+                remainingPayment = this.round(remainingPayment - paymentForThisAR);
+                totalPaid = this.round(totalPaid + paymentForThisAR);
 
                 await tx.creditMovement.create({
                     data: {
@@ -207,33 +228,91 @@ export class CustomersService {
                         type: "PAYMENT",
                         amount: paymentForThisAR,
                         saleId: ar.saleId,
-                        currentDebtSnapshot: this.round(Number(account.currentDebt) - totalPaid),
+                        currentDebtSnapshot: this.round(debtBefore - totalPaid),
                         note: dto.note ?? "Abono a cuenta",
                         cashSessionId: activeSession.id,
                     },
                 });
+
+                lines.push({
+                    saleId: ar.saleId,
+                    invoiceNumber: ar.sale.invoiceNumber,
+                    ncf: ar.sale.ncf,
+                    amountApplied: paymentForThisAR,
+                    pendingAfter: newPending,
+                });
             }
 
-            // 4. Actualizar saldo final del cliente
-            const newDebt = this.round(Number(account.currentDebt) - totalPaid);
+            if (totalPaid <= 0) {
+                throw new BadRequestException("El cliente no tiene facturas pendientes por cobrar.");
+            }
+
+            // 4. Saldo final del cliente y movimiento de caja
+            const newDebt = this.round(debtBefore - totalPaid);
             await tx.creditAccount.update({
                 where: { id: account.id },
-                data: { currentDebt: newDebt }
+                data: { currentDebt: newDebt },
             });
-
 
             await tx.cashMovement.create({
                 data: {
                     cashSessionId: activeSession.id,
                     type: "INCOME",
                     amount: totalPaid,
-                    description: `Abono de deuda: ${dto.note ?? 'Cliente'}`,
-                    userId: userId,
+                    description: `Abono de deuda: ${dto.note ?? "Cliente"}`,
+                    userId,
                 },
             });
 
-            return { message: "Pago procesado con éxito", newDebt };
+            // 5. Recibo de pago con número consecutivo por negocio (REC-000001)
+            const last = await tx.paymentReceipt.findFirst({
+                where: { businessId },
+                orderBy: { createdAt: "desc" },
+                select: { receiptNumber: true },
+            });
+            const nextNumber = (last ? parseInt(last.receiptNumber.replace(/\D/g, ""), 10) || 0 : 0) + 1;
+            const receiptNumber = `REC-${String(nextNumber).padStart(6, "0")}`;
+
+            const receipt = await tx.paymentReceipt.create({
+                data: {
+                    businessId,
+                    customerId,
+                    receiptNumber,
+                    amount: totalPaid,
+                    debtBefore,
+                    debtAfter: newDebt,
+                    note: dto.note,
+                    cashSessionId: activeSession.id,
+                    createdById: userId,
+                    lines: { create: lines },
+                },
+                include: receiptInclude,
+            });
+
+            return { message: "Pago procesado con éxito", newDebt, receipt };
         }, { isolationLevel: "Serializable" });
+    }
+
+    // ==========================================
+    // RECIBOS DE PAGO (historial y reimpresión)
+    // ==========================================
+    async listPaymentReceipts(businessId: string, customerId?: string) {
+        return this.prisma.paymentReceipt.findMany({
+            where: { businessId, ...(customerId ? { customerId } : {}) },
+            include: receiptInclude,
+            orderBy: { createdAt: "desc" },
+            take: 200,
+        });
+    }
+
+    async getPaymentReceipt(id: string, businessId: string) {
+        const receipt = await this.prisma.paymentReceipt.findFirst({
+            where: { id, businessId },
+            include: receiptInclude,
+        });
+
+        if (!receipt) throw new NotFoundException("Recibo no encontrado.");
+        return receipt;
     }
 
     // ==========================================

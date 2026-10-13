@@ -412,6 +412,11 @@ export const toggleCustomer = (id: string) => request(`/customers/${id}/toggle`,
 export const recordPayment = (customerId: string, data: { amount: number; note?: string }) =>
   request(`/customers/${customerId}/payment`, { method: "POST", body: JSON.stringify(data) });
 
+export const getPaymentReceipts = (customerId?: string) =>
+  request(`/customers/payments${customerId ? `?customerId=${encodeURIComponent(customerId)}` : ""}`);
+
+export const getPaymentReceipt = (id: string) => request(`/customers/payments/${id}`);
+
 export const trackImei = (serialNumber: string) =>
   request(`/imei-tracker/${serialNumber}`);
 

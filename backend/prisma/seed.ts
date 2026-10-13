@@ -8,7 +8,7 @@ async function main() {
     // 1. GET OR CREATE BUSINESS
     // =========================
     let business = await prisma.business.findFirst({ where: { slug: "OGAdmin" } });
-
+    
     if (!business) {
         business = await prisma.business.create({
             data: {
@@ -20,14 +20,15 @@ async function main() {
             },
         });
     }
-
+    
     // =========================
     // 2. CREATE DEFAULT SETTINGS
     // =========================
     const settings = await prisma.businessSettings.findFirst({
         where: { businessId: business.id },
     });
-
+    
+    
     if (!settings) {
         await prisma.businessSettings.create({
             data: {
@@ -41,7 +42,7 @@ async function main() {
             },
         });
     }
-
+    
     // =========================
     // 3. CREATE OWNER USER
     // =========================
@@ -65,10 +66,10 @@ async function main() {
             },
         });
     }
-
+    
     console.log("✅ Seed completed successfully");
 }
-
+    
 main()
     .catch((e) => {
         console.error(e);
