@@ -65,27 +65,27 @@ export default function PurchaseForm({ onSubmit, loading }: Props) {
   return (
     <div className="bg-white border rounded-3xl p-6 shadow-sm">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">New Purchase</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Nueva Compra</h2>
 
         <button
           onClick={addItem}
           className="bg-black text-white px-4 py-2 rounded-xl flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Add Item
+          Agregar Articulo
         </button>
       </div>
 
       {/* SUPPLIER */}
       <div className="mb-6">
-        <label className="block mb-2 font-medium text-gray-700">Supplier</label>
+        <label className="block mb-2 font-medium text-gray-700">Suplidor</label>
 
         <select
           value={supplierId}
           onChange={(e) => setSupplierId(e.target.value)}
           className="w-full border rounded-2xl p-4 text-gray-800"
         >
-          <option value="">Select supplier</option>
+          <option value="">Seleccionar supplidor</option>
 
           {suppliers.map((supplier) => (
             <option key={supplier.id} value={supplier.id}>
@@ -106,7 +106,7 @@ export default function PurchaseForm({ onSubmit, loading }: Props) {
                 onChange={(e) => updateItem(index, "productId", e.target.value)}
                 className="border rounded-xl p-3 text-gray-800"
               >
-                <option value="">Product</option>
+                <option value="">Producto</option>
 
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>

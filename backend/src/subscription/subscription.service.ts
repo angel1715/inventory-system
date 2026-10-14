@@ -18,6 +18,21 @@ export class SubscriptionService {
         return d;
     }
 
+        /**
+     * Regla única de acceso. Una suscripción cancelada no da acceso, ni siquiera de por vida.
+     */
+    isActive(
+        sub: { accessType: string; subscriptionStatus: string; currentPeriodEnd: Date } | null,
+    ): boolean {
+        if (!sub) return false;
+
+        if (sub.subscriptionStatus === 'CANCELED') return false;
+
+        if (sub.accessType === 'LIFETIME') return true;
+
+        return sub.currentPeriodEnd > new Date();
+    }
+
     /**
      * Valida si el negocio tiene acceso activo (Trial, Subscription o Lifetime).
      */
@@ -26,13 +41,7 @@ export class SubscriptionService {
             where: { businessId },
         });
 
-        if (!sub) return false;
-
-        // 1. Acceso de por vida
-        if (sub.accessType === 'LIFETIME') return true;
-
-        // 2. Si es TRIAL o SUBSCRIPTION, validamos la fecha actual vs vencimiento
-        return sub.currentPeriodEnd > new Date();
+        return this.isActive(sub);
     }
 
     // Agrega esto a tu SubscriptionService

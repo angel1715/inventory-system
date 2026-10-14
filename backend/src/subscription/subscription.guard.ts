@@ -3,7 +3,6 @@ import {
     CanActivate,
     ExecutionContext,
     ForbiddenException,
-    Inject
 } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
 

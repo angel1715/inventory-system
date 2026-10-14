@@ -36,7 +36,7 @@ export default function PurchasesPage() {
         {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Purchases</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Compras</h1>
             <p className="text-gray-500">Inventory purchase history</p>
           </div>
 
@@ -52,7 +52,7 @@ export default function PurchasesPage() {
               href="/purchases/new"
               className="bg-black text-white px-5 py-3 rounded-2xl font-semibold hover:opacity-90 transition"
             >
-              New Purchase
+              Nueva compra
             </Link>
           </div>
         </div>
@@ -65,7 +65,7 @@ export default function PurchasesPage() {
             </div>
           ) : purchases.length === 0 ? (
             <div className="p-10 text-center text-gray-500">
-              No purchases found
+              No se encontraron compras
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -76,13 +76,13 @@ export default function PurchasesPage() {
                       Invoice
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Supplier
+                      Supplidor
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Date
+                      Fecha
                     </th>
                     <th className="text-left p-4 text-sm text-gray-500">
-                      Items
+                      Articulos
                     </th>
                     <th className="text-right p-4 text-sm text-gray-500">
                       Total

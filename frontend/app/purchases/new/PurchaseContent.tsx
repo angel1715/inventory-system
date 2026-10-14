@@ -242,27 +242,27 @@ export default function NewPurchasePage() {
         {/* HEADER */}
         <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">New Purchase</h1>
-            <p className="text-gray-500">Register supplier purchases</p>
+            <h1 className="text-3xl font-bold text-gray-900">Nueva Compra</h1>
+            <p className="text-gray-500">Registrar supplidor de compras</p>
           </div>
           <Link
             href="/purchases"
             className="bg-gray-800 text-white px-5 py-3 rounded-2xl hover:opacity-90 transition"
           >
-            Purchase history
+            Histrial de compras
           </Link>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* LEFT: BUSCADOR Y TARJETAS */}
           <div className="lg:col-span-2 bg-white rounded-3xl border p-6">
-            <h2 className="text-gray-700 text-xl font-bold mb-6">Products</h2>
+            <h2 className="text-gray-700 text-xl font-bold mb-6">Productos</h2>
             <div className="mb-6">
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products..."
+                placeholder="Buscar productos..."
                 className="w-full border rounded-2xl p-4 outline-none text-gray-700 focus:border-black"
               />
             </div>
@@ -329,20 +329,20 @@ export default function NewPurchasePage() {
           {/* RIGHT: DETALLES Y CARRITO */}
           <div className="bg-white rounded-3xl border p-6 shadow-sm">
             <h2 className="text-gray-700 text-xl font-bold mb-6">
-              Purchase Details
+              Detalles de la compra
             </h2>
 
             {/* SUPPLIER */}
             <div className="mb-6">
               <label className="block text-sm mb-2 text-gray-700 font-medium">
-                Supplier
+                Supplidor
               </label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
                 className="w-full border rounded-2xl p-3 outline-none text-gray-600 bg-gray-50"
               >
-                <option value="">Select supplier</option>
+                <option value="">Selectionar supplidor</option>
                 {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
@@ -368,14 +368,14 @@ export default function NewPurchasePage() {
                       onClick={() => removeItem(item.id)}
                       className="text-red-500 hover:text-red-700 text-sm"
                     >
-                      Remove
+                      Remover
                     </button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">
-                        Quantity
+                        Cantidad
                       </label>
                       <input
                         type="number"
@@ -388,7 +388,7 @@ export default function NewPurchasePage() {
                     </div>
                     <div>
                       <label className="text-xs text-gray-400 block mb-1">
-                        Cost
+                        Costo
                       </label>
                       <input
                         type="number"
@@ -405,7 +405,7 @@ export default function NewPurchasePage() {
                   {item.isSerialized && item.quantity > 0 && (
                     <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3 space-y-2">
                       <p className="text-xs font-semibold text-blue-800">
-                        Enter Serial / IMEI numbers:
+                        Digitar Serial / IMEI:
                       </p>
                       <div className="space-y-1z.5 max-h-[150px] overflow-y-auto pr-1">
                         {Array.from({ length: item.quantity }).map((_, idx) => (
@@ -472,7 +472,7 @@ export default function NewPurchasePage() {
 
             {cart.length === 0 && (
               <div className="text-center py-10 text-gray-500 border border-dashed rounded-2xl bg-gray-50">
-                No products added
+                Productos no agregado
               </div>
             )}
 
@@ -488,7 +488,7 @@ export default function NewPurchasePage() {
                 onClick={handleSubmit}
                 className="w-full mt-6 bg-black text-white py-4 rounded-2xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition"
               >
-                {loading ? "Saving..." : "Create Purchase"}
+                {loading ? "Saving..." : "Crear Compra"}
               </button>
             </div>
           </div>

@@ -30,7 +30,10 @@ export class AuthService {
   ) { }
 
   private hasActiveSubscription(subscription: any): boolean {
-    if (!subscription) return false;
+        if (!subscription) return false;
+
+    // Una suscripción cancelada no da acceso, ni siquiera de por vida
+    if (subscription.subscriptionStatus === "CANCELED") return false;
 
     return (
       subscription.accessType === "LIFETIME" ||
